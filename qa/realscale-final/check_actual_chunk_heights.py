@@ -39,8 +39,8 @@ def scan(root):
         count+=1
         cx=chunk.get('xPos');cz=chunk.get('zPos')
         if not isinstance(cx,int) or not isinstance(cz,int):continue
-        for dz in (2,8,14):
-         for dx in (2,8,14):
+        for dz in range(16):
+         for dx in range(16):
           x=cx*16+dx;z=cz*16+dz
           if not (-60<=x<=60 and -60<=z<=60):continue
           h=surface_height(chunk,dx,dz,-64,2096)
