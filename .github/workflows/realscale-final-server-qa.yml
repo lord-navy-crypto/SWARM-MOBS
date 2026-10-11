@@ -2,7 +2,7 @@ name: RealScale Final Battle actual NeoForge dedicated server smoke
 on:
   push:
     branches: [qa/realscale-final-battle-20261011]
-    paths: ['.github/workflows/realscale-final-server-qa.yml']
+    paths: ['.github/workflows/realscale-final-server-qa.yml', 'qa/realscale-final/check_actual_chunk_heights.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -112,5 +112,6 @@ jobs:
             qa/realscale-final/build-project/real_dem_anvil_qa.json
             qa/realscale-final/build-project/build/neoforge-server-smoke.log
             qa/realscale-final/build-project/run/**/level.dat
+            qa/realscale-final/build-project/run/**/region/*.mca
             qa/realscale-final/build-project/run/**/logs/latest.log
           if-no-files-found: warn
