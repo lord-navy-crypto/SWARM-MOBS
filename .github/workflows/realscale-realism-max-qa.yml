@@ -1,0 +1,56 @@
+name: RealScale v0.6 REALISM MAX actual Minecraft 1.21.1 seeds
+on:
+  push:
+    branches:
+      - qa/realscale-realism-max-20261011
+    paths:
+      - 'qa/realscale/**'
+      - '.github/workflows/realscale-realism-max-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [42, 20261011, 785312]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Reconstitute exact v0.6 datapack and verify SHA-256
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, lzma, hashlib
+          root=Path('qa/realscale')
+          p=root/'RealScaleTerrain_DataPack_1.21.1_v0.6_REALISM_MAX_EXPERIMENT.zip'
+          raw=lzma.decompress(base64.b64decode((root/'realism_max_v06_pack_lzma.b64').read_text().strip()))
+          digest=hashlib.sha256(raw).hexdigest()
+          assert digest=='30d13952edae17dfe377ce05266f7599044e5c7c569bbc0799f59d70c5ee085f',digest
+          p.write_bytes(raw)
+          print('Exact datapack, SHA256 verified',digest)
+          PY
+      - name: Test region and NBT parser against v0.6 pack
+        env:
+          PYTHONPATH: qa/realscale
+        run: |
+          ln -s RealScaleTerrain_DataPack_1.21.1_v0.6_REALISM_MAX_EXPERIMENT.zip qa/realscale/RealScaleTerrain_DataPack_1.21.1_v0.4_AUDIT.zip
+          python3 -m unittest -v qa/realscale/test_realscale_headless_qa.py
+      - name: Generate actual 1.21.1 world and scan saved Anvil chunks
+        run: |
+          python3 qa/realscale/realism_max_v06_engine_qa.py --pack qa/realscale/RealScaleTerrain_DataPack_1.21.1_v0.6_REALISM_MAX_EXPERIMENT.zip --seed ${{ matrix.seed }} --workspace "$RUNNER_TEMP/realscale_v06" --accept-eula
+      - name: Upload QA report and Minecraft logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RealScale-v06-seed-${{ matrix.seed }}
+          path: |
+            ${{ runner.temp }}/realscale_v06/qa_seed_${{ matrix.seed }}/qa_result.json
+            ${{ runner.temp }}/realscale_v06/qa_seed_${{ matrix.seed }}/server.log
+          if-no-files-found: warn
