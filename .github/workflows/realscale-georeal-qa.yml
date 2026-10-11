@@ -35,7 +35,9 @@ jobs:
           (root/'RealScaleTerrain_DataPack_1.21.1_v0.5_GEO_EXPERIMENT.zip').write_bytes(raw)
           print('Exact v0.5 datapack SHA256 verified',expected)
           PY
-      - name: Reuse preserved original v0.4 profile for legacy parser unit test\n        run: ln -s RealScaleTerrain_DataPack_1.21.1_v0.5_GEO_EXPERIMENT.zip qa/realscale/RealScaleTerrain_DataPack_1.21.1_v0.4_AUDIT.zip\n      - name: Unit tests - NBT, palette and region parser
+      - name: Reuse preserved original v0.4 profile for legacy parser unit test
+        run: ln -s RealScaleTerrain_DataPack_1.21.1_v0.5_GEO_EXPERIMENT.zip qa/realscale/RealScaleTerrain_DataPack_1.21.1_v0.4_AUDIT.zip
+      - name: Unit tests - NBT, palette and region parser
         env:
           PYTHONPATH: qa/realscale
         run: python3 -m unittest -v qa/realscale/test_realscale_headless_qa.py
