@@ -32,7 +32,7 @@ jobs:
           p=root/'RealScaleTerrain_DataPack_1.21.1_v0.6_REALISM_MAX_EXPERIMENT.zip'
           raw=lzma.decompress(base64.b64decode((root/'realism_max_v06_pack_lzma.b64').read_text().strip()))
           digest=hashlib.sha256(raw).hexdigest()
-          assert digest=='30d13952edae17dfe377ce05266f7599044e5c7c569bbc0799f59d70c5ee085f',digest
+          assert digest=='d82e1e09d71db278458ffdda811644bda2445b662278e5287b0ef8a715716b55',digest
           p.write_bytes(raw)
           print('Exact datapack, SHA256 verified',digest)
           PY
