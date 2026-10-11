@@ -62,6 +62,8 @@ def audit_village(root,target):
     region_path=root/'world'/'region'
     found=[]; samples=[]
     for p in region_path.glob('r.*.*.mca'):
+        if p.stat().st_size < 8192:
+            continue  # Empty region placeholder, not a saved Anvil header.
         for chunk in core.iter_region_chunks(p):
             starts=chunk.get('structures',{}).get('starts',{})
             for name,obj in starts.items():
@@ -81,6 +83,8 @@ def audit_village(root,target):
     pending={((s['x']//16),(s['z']//16)) for s in samples}
     chunk_cache={}
     for p in region_path.glob('r.*.*.mca'):
+        if p.stat().st_size < 8192:
+            continue
         for c in core.iter_region_chunks(p):
             k=(c.get('xPos'),c.get('zPos'))
             if k in pending:chunk_cache[k]=c
