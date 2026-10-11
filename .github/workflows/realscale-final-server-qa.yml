@@ -100,12 +100,16 @@ jobs:
             raise SystemExit('NeoForge new-world smoke NOT VERIFIED')
           print('GAME ENGINE WORLDGEN SMOKE: PASS')
           PY
+      - name: Verify ACTUAL Anvil block heights match USGS sampled terrain
+        working-directory: qa/realscale-final/build-project
+        run: python3 ../check_actual_chunk_heights.py .
       - name: Upload server diagnostics and generated world metadata
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: RealScale-FinalBattle-Actual-NeoForge-Server-QA
           path: |
+            qa/realscale-final/build-project/real_dem_anvil_qa.json
             qa/realscale-final/build-project/build/neoforge-server-smoke.log
             qa/realscale-final/build-project/run/**/level.dat
             qa/realscale-final/build-project/run/**/logs/latest.log
