@@ -1,0 +1,53 @@
+name: RealScale 1.21.1 GEOREAL headless engine validation
+on:
+  push:
+    branches:
+      - qa/realscale-georeal-20261011
+    paths:
+      - 'qa/realscale/**'
+      - '.github/workflows/realscale-georeal-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  georeal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [42, 20261011, 785312]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Decode exact GEOREAL data pack and verify sha256
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, base64
+          root=Path('qa/realscale')
+          raw=base64.b64decode((root/'georeal_pack.b64').read_text().strip())
+          expected='8c859475b63f827ad20dfc40782df6e97cbe71c72330884381d6766c99c090f7'
+          assert hashlib.sha256(raw).hexdigest()==expected
+          (root/'RealScaleTerrain_DataPack_1.21.1_v0.5_GEO_EXPERIMENT.zip').write_bytes(raw)
+          print('Exact v0.5 datapack SHA256 verified',expected)
+          PY
+      - name: Unit tests - NBT, palette and region parser
+        env:
+          PYTHONPATH: qa/realscale
+        run: python3 -m unittest -v qa/realscale/test_realscale_headless_qa.py
+      - name: Generate world with real Minecraft 1.21.1 ULTIMATE GEOREAL
+        run: |
+          python3 qa/realscale/georeal_headless_qa.py --pack qa/realscale/RealScaleTerrain_DataPack_1.21.1_v0.5_GEO_EXPERIMENT.zip --seed ${{ matrix.seed }} --workspace "$RUNNER_TEMP/realscale_georeal" --accept-eula
+      - name: Retain real engine log and chunk report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: georeal-1-21-1-seed-${{ matrix.seed }}
+          path: |
+            ${{ runner.temp }}/realscale_georeal/qa_seed_${{ matrix.seed }}/qa_result.json
+            ${{ runner.temp }}/realscale_georeal/qa_seed_${{ matrix.seed }}/server.log
+          if-no-files-found: warn
