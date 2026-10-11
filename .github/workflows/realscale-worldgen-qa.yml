@@ -1,0 +1,64 @@
+name: RealScale 1.21.1 engine worldgen verification
+on:
+  push:
+    branches:
+      - qa/realscale-worldgen-20261011
+    paths:
+      - 'qa/realscale/**'
+      - '.github/workflows/realscale-worldgen-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  worldgen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [42, 20261011, 785312]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Rebuild EXACT worldgen JSON from verified archive
+        run: |
+          python3 - <<'PY'
+          import base64,lzma,tarfile,io,zipfile,hashlib,pathlib
+          root=pathlib.Path('qa/realscale')
+          b64=(root/'realscale_exact_qa.b64').read_text().strip()
+          raw=lzma.decompress(base64.b64decode(b64))
+          want='ad8168e33da18479d6570497509e76768322d671e82e5a0a1664f85082bce2f7'
+          assert hashlib.sha256(raw).hexdigest()==want,'Worldgen source archive changed!'
+          pack=root/'RealScaleTerrain_DataPack_1.21.1_v0.4_AUDIT.zip'
+          with tarfile.open(fileobj=io.BytesIO(raw),mode='r') as tar,zipfile.ZipFile(pack,'w',compression=zipfile.ZIP_DEFLATED) as zipout:
+              members=sorted((m for m in tar.getmembers() if m.isfile()),key=lambda m:m.name)
+              for m in members:
+                  assert m.name=='pack.mcmeta' or m.name.startswith('data/')
+                  zipout.writestr(m.name,tar.extractfile(m).read())
+          print('Rebuilt',len(members),'exact source files; source SHA256 verified')
+          PY
+      - name: Run region/NBT unit tests
+        env:
+          PYTHONPATH: qa/realscale
+        run: python3 -m unittest -v qa/realscale/test_realscale_headless_qa.py
+      - name: Run official Minecraft 1.21.1 server with ULTIMATE preset
+        run: |
+          python3 qa/realscale/realscale_headless_qa.py \
+            --pack qa/realscale/RealScaleTerrain_DataPack_1.21.1_v0.4_AUDIT.zip \
+            --seed ${{ matrix.seed }} \
+            --workspace "$RUNNER_TEMP/realscale_qa" \
+            --accept-eula
+      - name: Upload diagnostics (even on failure)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: realscale-v04-seed-${{ matrix.seed }}
+          path: |
+            ${{ runner.temp }}/realscale_qa/qa_seed_${{ matrix.seed }}/qa_result.json
+            ${{ runner.temp }}/realscale_qa/qa_seed_${{ matrix.seed }}/server.log
+          if-no-files-found: warn
