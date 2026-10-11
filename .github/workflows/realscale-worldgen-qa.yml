@@ -53,6 +53,11 @@ jobs:
             --seed ${{ matrix.seed }} \
             --workspace "$RUNNER_TEMP/realscale_qa" \
             --accept-eula
+      - name: Locate real village and check piece grounding (seed 42)
+        if: matrix.seed == 42
+        run: |
+          python3 qa/realscale/village_structure_qa.py \
+            --world "$RUNNER_TEMP/realscale_qa/qa_seed_42"
       - name: Upload diagnostics (even on failure)
         uses: actions/upload-artifact@v4
         if: always()
@@ -61,4 +66,6 @@ jobs:
           path: |
             ${{ runner.temp }}/realscale_qa/qa_seed_${{ matrix.seed }}/qa_result.json
             ${{ runner.temp }}/realscale_qa/qa_seed_${{ matrix.seed }}/server.log
+            ${{ runner.temp }}/realscale_qa/qa_seed_${{ matrix.seed }}/village_qa_result.json
+            ${{ runner.temp }}/realscale_qa/qa_seed_${{ matrix.seed }}/village_server.log
           if-no-files-found: warn
