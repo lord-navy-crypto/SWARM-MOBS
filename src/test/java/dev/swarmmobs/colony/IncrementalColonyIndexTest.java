@@ -42,6 +42,18 @@ class IncrementalColonyIndexTest {
         assertEquals(1, index.knownBlocks());
     }
 
+    @Test void resetThenDeferAndRetryOrigin() {
+        var start = new ConnectedColonyLayout.Cell(0, 64, 0);
+        var index = new IncrementalColonyIndex(start);
+        index.step(10, c -> true, start::equals);
+        index.reset(start);
+        index.step(1, c -> false, c -> { fail("unloaded origin read"); return false; });
+        assertTrue(index.hasDeferredFrontier());
+        index.retryDeferred();
+        index.step(8, c -> true, start::equals);
+        assertEquals(1, index.knownBlocks());
+    }
+
     @Test void diagonalIsNotConnected() {
         var start = new ConnectedColonyLayout.Cell(0, 64, 0);
         var index = new IncrementalColonyIndex(start);
