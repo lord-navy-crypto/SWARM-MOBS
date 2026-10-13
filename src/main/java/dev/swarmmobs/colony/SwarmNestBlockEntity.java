@@ -44,6 +44,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     // True only for an automatically grown Nest Core extension. Never runs
     // an independent economy/spawner; persisted to prevent duplicate colonies.
     private boolean connectedExtension;
+    private BlockPos connectedRoot;
     private int resources;
     private int chamberLevel;
     // Actual placed shell modules can lag virtual capacity if the visual
@@ -83,7 +84,13 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     }
 
     public boolean isConnectedExtension() { return connectedExtension; }
-    public void markConnectedExtension() {
+    public BlockPos connectedRoot() {
+        return connectedExtension ? connectedRoot : worldPosition;
+    }
+    public void markConnectedExtension(BlockPos root) {
+        if (root == null || root.equals(worldPosition))
+            throw new IllegalArgumentException("invalid extension root");
+        connectedRoot = root.immutable();
         connectedExtension = true;
         setChanged();
     }
@@ -230,6 +237,8 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         connectedExtension = tag.getBoolean("ConnectedExtension");
+        connectedRoot = connectedExtension && tag.contains("ConnectedRoot")
+                ? BlockPos.of(tag.getLong("ConnectedRoot")) : null;
         resources = Math.max(0, Math.min(SwarmNestColonyPolicy.MAX_STORED_RESOURCES,
                 tag.getInt("Resources")));
         chamberLevel = Math.max(0, Math.min(SwarmNestArchitecturePolicy.MAX_CHAMBER_LEVEL,
@@ -262,6 +271,8 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
         tag.putBoolean("ConnectedExtension", connectedExtension);
+        if (connectedExtension && connectedRoot != null)
+            tag.putLong("ConnectedRoot", connectedRoot.asLong());
         tag.putInt("Resources", resources);
         tag.putInt("ChamberLevel", chamberLevel);
         tag.putInt("VisibleChamberLevel", visibleChamberLevel);
