@@ -41,6 +41,9 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     private static final int RESOURCE_RADIUS = 3;
     private static final int[] DX = {2, -2, 0, 0, 2, -2, 2, -2};
     private static final int[] DZ = {0, 0, 2, -2, 2, 2, -2, -2};
+    // True only for an automatically grown Nest Core extension. Never runs
+    // an independent economy/spawner; persisted to prevent duplicate colonies.
+    private boolean connectedExtension;
     private int resources;
     private int chamberLevel;
     // Actual placed shell modules can lag virtual capacity if the visual
@@ -77,6 +80,12 @@ public final class SwarmNestBlockEntity extends BlockEntity {
 
     public SwarmNestBlockEntity(BlockPos pos, BlockState state) {
         super(SwarmNestBlockEntities.NEST.get(), pos, state);
+    }
+
+    public boolean isConnectedExtension() { return connectedExtension; }
+    public void markConnectedExtension() {
+        connectedExtension = true;
+        setChanged();
     }
 
     public int resources() { return resources; }
@@ -220,6 +229,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
+        connectedExtension = tag.getBoolean("ConnectedExtension");
         resources = Math.max(0, Math.min(SwarmNestColonyPolicy.MAX_STORED_RESOURCES,
                 tag.getInt("Resources")));
         chamberLevel = Math.max(0, Math.min(SwarmNestArchitecturePolicy.MAX_CHAMBER_LEVEL,
@@ -251,6 +261,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
+        tag.putBoolean("ConnectedExtension", connectedExtension);
         tag.putInt("Resources", resources);
         tag.putInt("ChamberLevel", chamberLevel);
         tag.putInt("VisibleChamberLevel", visibleChamberLevel);
@@ -370,7 +381,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     }
 
     public static void tick(Level world, BlockPos pos, BlockState state, SwarmNestBlockEntity core) {
-        if (!(world instanceof ServerLevel level)
+        if (core.connectedExtension || !(world instanceof ServerLevel level)
                 || !SwarmConfig.ENABLED.get()
                 || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()) return;
 
@@ -381,7 +392,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     }
 
     public void runColonyCycle(ServerLevel level) {
-        if (!SwarmConfig.ENABLED.get() || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()
+        if (connectedExtension || !SwarmConfig.ENABLED.get() || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()
                 || level.getBlockEntity(worldPosition) != this
                 || !level.getBlockState(worldPosition).is(SwarmNestBlocks.NEST_CORE.get())) {
             return;
