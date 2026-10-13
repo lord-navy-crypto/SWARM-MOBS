@@ -75,7 +75,7 @@ public final class IncrementalColonyIndex {
     }
     public boolean hasDeferredFrontier() { return !deferred.isEmpty(); }
 
-    /** Saturates integer capacity but does not impose a colony size ceiling. */
+    /** Exact long capacity; overflow is rejected rather than silently truncating. */
     public long capacity(long capacityPerBlock) {
         if (capacityPerBlock < 1) throw new IllegalArgumentException("capacityPerBlock");
         return Math.multiplyExact((long) members.size(), capacityPerBlock);
@@ -93,6 +93,6 @@ public final class IncrementalColonyIndex {
         members.clear();
         deferred.clear();
         initialized = false;
-        pending.add(Objects.requireNonNull(origin));
+        enqueue(Objects.requireNonNull(origin));
     }
 }
