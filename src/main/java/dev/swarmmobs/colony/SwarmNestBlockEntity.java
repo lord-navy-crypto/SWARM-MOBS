@@ -45,6 +45,8 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     // an independent economy/spawner; persisted to prevent duplicate colonies.
     private boolean connectedExtension;
     private BlockPos connectedRoot;
+    private BlockPos lastConnectedTip;
+    private long connectedBuiltCount;
     private int resources;
     private int chamberLevel;
     // Actual placed shell modules can lag virtual capacity if the visual
@@ -95,6 +97,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         setChanged();
     }
 
+    public long connectedBuiltCount() { return connectedBuiltCount; }
     public int resources() { return resources; }
     public int chamberLevel() { return chamberLevel; }
     public int visibleChamberLevel() { return visibleChamberLevel; }
@@ -239,6 +242,9 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         connectedExtension = tag.getBoolean("ConnectedExtension");
         connectedRoot = connectedExtension && tag.contains("ConnectedRoot")
                 ? BlockPos.of(tag.getLong("ConnectedRoot")) : null;
+        lastConnectedTip = tag.contains("LastConnectedTip")
+                ? BlockPos.of(tag.getLong("LastConnectedTip")) : null;
+        connectedBuiltCount = Math.max(0L, tag.getLong("ConnectedBuiltCount"));
         resources = Math.max(0, Math.min(SwarmNestColonyPolicy.MAX_STORED_RESOURCES,
                 tag.getInt("Resources")));
         chamberLevel = Math.max(0, Math.min(SwarmNestArchitecturePolicy.MAX_CHAMBER_LEVEL,
@@ -271,6 +277,8 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
         tag.putBoolean("ConnectedExtension", connectedExtension);
+        if (lastConnectedTip != null) tag.putLong("LastConnectedTip", lastConnectedTip.asLong());
+        tag.putLong("ConnectedBuiltCount", connectedBuiltCount);
         if (connectedExtension && connectedRoot != null)
             tag.putLong("ConnectedRoot", connectedRoot.asLong());
         tag.putInt("Resources", resources);
@@ -418,6 +426,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
 
         absorbDroppedResources(level);
         List<PathfinderMob> members = members(level);
+        tryGrowConnectedCore(level, members.size());
         enrollNearbyWorkers(level, members);
         assignVisibleLeaders(members);
 
@@ -727,6 +736,50 @@ public final class SwarmNestBlockEntity extends BlockEntity {
             }
             data.putLong("SwarmColonyNest", worldPosition.asLong());
             data.putString("SwarmColonyDimension", dimension);
+        }
+    }
+
+    /**
+     * Optional physical expansion: one genuine stored-material purchase per
+     * successful block placement, never an extra economy on extensions.
+     * A bounded rotating tip allows unbounded eventual growth without scanning
+     * every previously built core on the server tick.
+     */
+    private void tryGrowConnectedCore(ServerLevel level, int localPopulation) {
+        if (connectedExtension || !SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                || !level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)
+                || resources != SwarmNestColonyPolicy.MAX_STORED_RESOURCES
+                || localPopulation < effectiveCapacity()
+                || soilPoints < SwarmNestArchitecturePolicy.SOIL_COST
+                || timberPoints < SwarmNestArchitecturePolicy.TIMBER_COST
+                || playerNearShell(level)) return;
+
+        BlockPos parent = worldPosition;
+        if (lastConnectedTip != null) {
+            // Only follow a loaded tip whose persisted ownership remains intact.
+            if (!level.hasChunkAt(lastConnectedTip)
+                    || !(level.getBlockEntity(lastConnectedTip) instanceof SwarmNestBlockEntity tip)
+                    || !tip.isConnectedExtension()
+                    || !worldPosition.equals(tip.connectedRoot())) return;
+            parent = lastConnectedTip;
+        }
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos site = parent.relative(direction);
+            if (!level.hasChunkAt(site) || !level.isInWorldBounds(site)
+                    || !level.getBlockState(site).isAir()) continue;
+            if (!level.getEntities((net.minecraft.world.entity.Entity) null,
+                    new AABB(site), entity -> entity.isAlive()).isEmpty()) continue;
+            if (ColonyPhysicalGrowth.placeOne(level, parent, site,
+                    ColonyPhysicalGrowth.Kind.MONSTER)) {
+                soilPoints -= SwarmNestArchitecturePolicy.SOIL_COST;
+                timberPoints -= SwarmNestArchitecturePolicy.TIMBER_COST;
+                resources -= SwarmNestArchitecturePolicy.SOIL_COST
+                        + SwarmNestArchitecturePolicy.TIMBER_COST;
+                lastConnectedTip = site.immutable();
+                connectedBuiltCount++;
+                setChanged();
+                return;
+            }
         }
     }
 
