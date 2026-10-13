@@ -36,6 +36,16 @@ public final class ColonyPhysicalGrowth {
             case BEEHIVE -> Blocks.BEEHIVE;
         };
         if (!parentState.is(source)) return false;
+        BlockPos owner = parent;
+        if (kind == Kind.MONSTER) {
+            if (!(level.getBlockEntity(parent) instanceof SwarmNestBlockEntity parentCore))
+                return false;
+            owner = parentCore.connectedRoot();
+            // Do not grow from an orphaned or unloaded root.
+            if (owner == null || !level.hasChunkAt(owner)
+                    || !(level.getBlockEntity(owner) instanceof SwarmNestBlockEntity root)
+                    || root.isConnectedExtension()) return false;
+        }
         if (!level.getBlockState(target).isAir()) return false;
         // The target block entity (including a vanilla hive's real inventory)
         // is created by the regular Minecraft block placement mechanism.
@@ -49,7 +59,7 @@ public final class ColonyPhysicalGrowth {
         if (!level.setBlock(target, newState, Block.UPDATE_ALL)) return false;
         if (kind == Kind.MONSTER) {
             if (level.getBlockEntity(target) instanceof SwarmNestBlockEntity extension) {
-                extension.markConnectedExtension();
+                extension.markConnectedExtension(owner);
             } else {
                 // Never leave an unmarked, independently ticking core behind.
                 level.removeBlock(target, false);
