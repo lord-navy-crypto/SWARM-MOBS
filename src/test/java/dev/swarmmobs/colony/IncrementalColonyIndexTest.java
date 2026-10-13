@@ -62,7 +62,7 @@ class IncrementalColonyIndexTest {
         assertTrue(index.completeForLoadedRegion());
         assertEquals(64, index.knownBlocks());
         // Only accepted cells and a finite exposed boundary need inspection.
-        assertTrue(visited <= 160, "Frontier should not contain repeated candidates");
+        assertTrue(visited <= 224, "Each of 64 cells plus its 160 unique boundary cells is inspected once");
     }
 
 }
