@@ -40,4 +40,12 @@ class ColonyExpansionPlannerTest {
                 c -> c.y() == 64 && c.z() == 1,
                 ColonyExpansionPlanner.Shape.HORIZONTAL, 123, 10000).isPresent());
     }
+    @Test void rejectsOversizedSingleAttemptWithoutCappingTotalColony() {
+        var sample = new java.util.HashSet<ConnectedColonyLayout.Cell>();
+        for (int x = 0; x < 2049; x++) sample.add(new ConnectedColonyLayout.Cell(x, 64, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> ColonyExpansionPlanner.choose(sample, c -> true,
+                        ColonyExpansionPlanner.Shape.COMPACT, 12, 100));
+    }
+
 }
