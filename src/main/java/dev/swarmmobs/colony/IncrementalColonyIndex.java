@@ -17,13 +17,14 @@ import java.util.function.Predicate;
  */
 public final class IncrementalColonyIndex {
     private final ArrayDeque<ConnectedColonyLayout.Cell> pending = new ArrayDeque<>();
+    private final Set<ConnectedColonyLayout.Cell> queued = new HashSet<>();
     private final Set<ConnectedColonyLayout.Cell> inspected = new HashSet<>();
     private final Set<ConnectedColonyLayout.Cell> members = new HashSet<>();
     private final Set<ConnectedColonyLayout.Cell> deferred = new HashSet<>();
     private boolean initialized;
 
     public IncrementalColonyIndex(ConnectedColonyLayout.Cell origin) {
-        pending.add(Objects.requireNonNull(origin));
+        enqueue(Objects.requireNonNull(origin));
     }
 
     /**
@@ -39,6 +40,7 @@ public final class IncrementalColonyIndex {
         int processed = 0;
         while (processed < budget && !pending.isEmpty()) {
             var cell = pending.removeFirst();
+            queued.remove(cell);
             if (inspected.contains(cell) || deferred.contains(cell)) continue;
             processed++;
             if (!loaded.test(cell)) {
@@ -50,7 +52,7 @@ public final class IncrementalColonyIndex {
             if (members.add(cell)) {
                 for (var neighbor : cell.neighbors()) {
                     if (!inspected.contains(neighbor) && !deferred.contains(neighbor))
-                        pending.addLast(neighbor);
+                        enqueue(neighbor);
                 }
             }
         }
@@ -59,8 +61,12 @@ public final class IncrementalColonyIndex {
 
     /** Retry frontier cells previously unavailable because their chunk was unloaded. */
     public void retryDeferred() {
-        pending.addAll(deferred);
+        for (var cell : deferred) enqueue(cell);
         deferred.clear();
+    }
+
+    private void enqueue(ConnectedColonyLayout.Cell cell) {
+        if (queued.add(cell)) pending.addLast(cell);
     }
 
     public int knownBlocks() { return members.size(); }
@@ -82,6 +88,7 @@ public final class IncrementalColonyIndex {
     /** Re-index after a block is removed, allowing disconnected groups to split. */
     public void reset(ConnectedColonyLayout.Cell origin) {
         pending.clear();
+        queued.clear();
         inspected.clear();
         members.clear();
         deferred.clear();
