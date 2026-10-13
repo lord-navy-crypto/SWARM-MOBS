@@ -21,7 +21,10 @@ public final class ColonyPhysicalGrowth {
                                    Kind kind) {
         if (level == null || parent == null || target == null || kind == null)
             return false;
-        if (!parent.closerThan(target, 1.01)) return false; // six-face neighbor
+        int faceDistance = Math.abs(parent.getX() - target.getX())
+                + Math.abs(parent.getY() - target.getY())
+                + Math.abs(parent.getZ() - target.getZ());
+        if (faceDistance != 1) return false; // six-face neighbor only
         if (!level.isInWorldBounds(parent) || !level.isInWorldBounds(target)
                 || !level.hasChunkAt(parent) || !level.hasChunkAt(target))
             return false;
@@ -43,6 +46,16 @@ public final class ColonyPhysicalGrowth {
             newState = newState.setValue(net.minecraft.world.level.block.BeehiveBlock.FACING,
                     parentState.getValue(net.minecraft.world.level.block.BeehiveBlock.FACING));
         }
-        return level.setBlock(target, newState, Block.UPDATE_ALL);
+        if (!level.setBlock(target, newState, Block.UPDATE_ALL)) return false;
+        if (kind == Kind.MONSTER) {
+            if (level.getBlockEntity(target) instanceof SwarmNestBlockEntity extension) {
+                extension.markConnectedExtension();
+            } else {
+                // Never leave an unmarked, independently ticking core behind.
+                level.removeBlock(target, false);
+                return false;
+            }
+        }
+        return true;
     }
 }
