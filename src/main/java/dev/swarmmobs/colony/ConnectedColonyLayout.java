@@ -41,7 +41,7 @@ public final class ConnectedColonyLayout {
                               int maxBlocks, int capacityPerBlock) {
         Objects.requireNonNull(origin);
         Objects.requireNonNull(loadedMember);
-        if (maxBlocks < 1 || capacityPerBlock < 1 ||
+        if (maxBlocks < 1 || maxBlocks > 4096 || capacityPerBlock < 1 ||
                 (long) maxBlocks * capacityPerBlock > Integer.MAX_VALUE)
             throw new IllegalArgumentException("invalid limits");
         if (!loadedMember.test(origin)) return new Colony(Set.of(), 0);
