@@ -49,4 +49,20 @@ class IncrementalColonyIndexTest {
         index.step(20, c -> true, blocks::contains);
         assertEquals(1, index.knownBlocks());
     }
+    @Test void denseConnectedNetworkDoesNotRepeatQueuedWork() {
+        var index = new IncrementalColonyIndex(new ConnectedColonyLayout.Cell(0, 64, 0));
+        int visited = 0;
+        for (int i = 0; i < 100 && !index.completeForLoadedRegion(); i++) {
+            int count = index.step(3, c -> true,
+                    c -> c.y() == 64 && c.x() >= 0 && c.x() < 8
+                            && c.z() >= 0 && c.z() < 8);
+            assertTrue(count <= 3);
+            visited += count;
+        }
+        assertTrue(index.completeForLoadedRegion());
+        assertEquals(64, index.knownBlocks());
+        // Only accepted cells and a finite exposed boundary need inspection.
+        assertTrue(visited < 120, "Frontier should not contain repeated candidates");
+    }
+
 }
