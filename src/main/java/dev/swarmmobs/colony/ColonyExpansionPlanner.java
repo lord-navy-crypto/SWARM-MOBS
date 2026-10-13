@@ -34,6 +34,7 @@ public final class ColonyExpansionPlanner {
         Objects.requireNonNull(validSite);
         Objects.requireNonNull(shape);
         if (maxCandidates < 1) throw new IllegalArgumentException("maxCandidates");
+        if (sampledCells.size() > 2048) throw new IllegalArgumentException("sample too large; rotate bounded frontier slices");
         if (sampledCells.isEmpty()) return Optional.empty();
 
         Set<ConnectedColonyLayout.Cell> candidates = new HashSet<>();
