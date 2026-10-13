@@ -47,6 +47,16 @@ public final class ColonyPhysicalGrowth {
                     || root.isConnectedExtension()) return false;
         }
         if (!level.getBlockState(target).isAir()) return false;
+        if (kind == Kind.MONSTER) {
+            for (var direction : net.minecraft.core.Direction.values()) {
+                BlockPos neighbor = target.relative(direction);
+                if (!level.hasChunkAt(neighbor)) return false;
+                if (!level.getBlockState(neighbor).is(SwarmNestBlocks.NEST_CORE.get()))
+                    continue;
+                if (!(level.getBlockEntity(neighbor) instanceof SwarmNestBlockEntity adjacent)
+                        || !owner.equals(adjacent.connectedRoot())) return false;
+            }
+        }
         // The target block entity (including a vanilla hive's real inventory)
         // is created by the regular Minecraft block placement mechanism.
         BlockState newState = source.defaultBlockState();
