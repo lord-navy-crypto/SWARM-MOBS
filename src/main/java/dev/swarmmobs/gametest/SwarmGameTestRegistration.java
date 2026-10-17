@@ -5,6 +5,7 @@ import net.neoforged.neoforge.event.RegisterGameTestsEvent;
 public final class SwarmGameTestRegistration {
     public static void register(RegisterGameTestsEvent event) {
         event.register(SwarmRuntimeGameTests.class);
+        event.register(ConnectedColonyGameTests.class);
     }
 
     private SwarmGameTestRegistration() {}
