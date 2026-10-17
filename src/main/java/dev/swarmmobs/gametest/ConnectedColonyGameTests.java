@@ -2,6 +2,8 @@ package dev.swarmmobs.gametest;
 
 import dev.swarmmobs.SwarmMobs;
 import dev.swarmmobs.colony.ColonyPhysicalGrowth;
+import dev.swarmmobs.colony.ColonyPopulationRegistry;
+import net.minecraft.world.entity.EntityType;
 import dev.swarmmobs.colony.SwarmNestBlockEntity;
 import dev.swarmmobs.registry.SwarmNestBlocks;
 import net.minecraft.core.BlockPos;
@@ -75,6 +77,36 @@ public final class ConnectedColonyGameTests {
                 || !(level.getBlockEntity(helper.absolutePos(target)) instanceof BeehiveBlockEntity hive)
                 || hive.getOccupantCount() != 0) {
             helper.fail("Vanilla hive extension was not created as an empty vanilla hive");
+            return;
+        }
+        helper.succeed();
+    }
+
+    @PrefixGameTestTemplate(false)
+    @GameTest(batch = "swarm_colony_census", templateNamespace = SwarmMobs.MOD_ID,
+            template = TEMPLATE, timeoutTicks = 50)
+    public static void distributedPopulationCountsUniqueOwnerTaggedResidents(GameTestHelper helper) {
+        var home = helper.absolutePos(new BlockPos(2, 1, 2));
+        var unrelated = helper.absolutePos(new BlockPos(4, 1, 4));
+        var level = helper.getLevel();
+        var worker = helper.spawn(EntityType.ZOMBIE, new BlockPos(1, 1, 1));
+        var scout = helper.spawn(EntityType.SPIDER, new BlockPos(3, 1, 3));
+        var outsider = helper.spawn(EntityType.ZOMBIE, new BlockPos(4, 1, 1));
+        for (var member : java.util.List.of(worker, scout)) {
+            member.getPersistentData().putLong("SwarmColonyNest", home.asLong());
+            member.getPersistentData().putString("SwarmColonyDimension",
+                    level.dimension().location().toString());
+            ColonyPopulationRegistry.observe(level, member, level.getGameTime());
+        }
+        outsider.getPersistentData().putLong("SwarmColonyNest", unrelated.asLong());
+        outsider.getPersistentData().putString("SwarmColonyDimension",
+                level.dimension().location().toString());
+        ColonyPopulationRegistry.observe(level, outsider, level.getGameTime());
+        // Multiple tick reports from the same mob must not inflate capacity.
+        ColonyPopulationRegistry.observe(level, worker, level.getGameTime());
+        if (ColonyPopulationRegistry.count(level, home, level.getGameTime()) != 2
+                || ColonyPopulationRegistry.count(level, unrelated, level.getGameTime()) != 1) {
+            helper.fail("Census counted duplicate or foreign colony members");
             return;
         }
         helper.succeed();
