@@ -89,6 +89,8 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue NEST_HAUL_ATTEMPT_INTERVAL;
     public static final ModConfigSpec.BooleanValue NEST_VISIBLE_EXPANSION_ENABLED;
     public static final ModConfigSpec.BooleanValue NEST_CONNECTED_CORE_GROWTH_ENABLED;
+    public static final ModConfigSpec.BooleanValue NEST_COLONY_RALLY_ENABLED;
+    public static final ModConfigSpec.BooleanValue BEE_FLOWER_RECRUITMENT_ENABLED;
     public static final ModConfigSpec.BooleanValue BEE_CONNECTED_HIVE_GROWTH_ENABLED;
     public static final ModConfigSpec.IntValue NEST_MAX_POPULATION;
     public static final ModConfigSpec.BooleanValue NEST_ADAPTIVE_RECRUITMENT;
@@ -441,6 +443,14 @@ public final class SwarmConfig {
         BEE_CONNECTED_HIVE_GROWTH_ENABLED = BUILDER
                 .comment("EXPERIMENTAL: expand vanilla bee nests or beehives into adjacent air when full of bees and full of honey. Consumes the parent's honey level; OFF by default.")
                 .define("beeConnectedHiveGrowthEnabled", false);
+
+        NEST_COLONY_RALLY_ENABLED = BUILDER
+                .comment("EXPERIMENTAL: allow a limited set of nearby idle colony monsters to converge on a recent real encounter witness position; no remote target acquisition. OFF by default.")
+                .define("nestColonyRallyEnabled", false);
+
+        BEE_FLOWER_RECRUITMENT_ENABLED = BUILDER
+                .comment("EXPERIMENTAL: share actual observed flowers between nearby vanilla bees without replacing vanilla pollination AI. OFF by default.")
+                .define("beeFlowerRecruitmentEnabled", false);
 
         NEST_MAX_POPULATION = BUILDER
                 .comment("Maximum locally counted colony members before reproduction stops.")
