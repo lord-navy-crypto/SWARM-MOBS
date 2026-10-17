@@ -439,8 +439,15 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         advanceConnectedIndex(level);
         absorbDroppedResources(level);
         List<PathfinderMob> members = members(level);
-        tryGrowConnectedCore(level, members.size());
         enrollNearbyWorkers(level, members);
+        // UUID observations from all currently ticking loaded residents augment
+        // the local 14-block census. A maximum prevents double counting the
+        // same resident present in both sources.
+        int colonyPopulation = SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                ? Math.max(members.size(),
+                        ColonyPopulationRegistry.count(level, worldPosition, level.getGameTime()))
+                : members.size();
+        tryGrowConnectedCore(level, colonyPopulation);
         assignVisibleLeaders(members);
 
         // When enabled, each module gets two actual shell blocks. Verify
@@ -485,7 +492,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
                 SwarmConfig.NEST_WORKER_TARGET_SHARE.get(),
                 SwarmConfig.NEST_GUARD_TARGET_SHARE.get(),
                 SwarmConfig.NEST_RESPONSE_THRESHOLD.get());
-        recordPopulationSample(science.population());
+        recordPopulationSample(colonyPopulation);
         SwarmNestScienceTelemetry.record(level, worldPosition, this, science);
 
         boolean playerClose = level.players().stream().anyMatch(
@@ -497,7 +504,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         // Cheap resource/cooldown/population gates before reading eight
         // separate positions. Most inactive colonies do zero birth-site IO.
         boolean birthCouldRun = nutrientPoints + legacyPoints >= SwarmNestColonyPolicy.SPAWN_COST
-                && members.size() < effectiveCapacity()
+                && colonyPopulation < effectiveCapacity()
                 && tick >= nextSpawnTick
                 && !playerClose
                 && level.getDifficulty() != Difficulty.PEACEFUL
@@ -510,7 +517,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
                 level.hasChunkAt(worldPosition),
                 observed, playerClose,
                 birthSite != null,
-                nutrientPoints + legacyPoints, members.size(),
+                nutrientPoints + legacyPoints, colonyPopulation,
                 effectiveCapacity(), tick, nextSpawnTick)) {
             return;
         }
