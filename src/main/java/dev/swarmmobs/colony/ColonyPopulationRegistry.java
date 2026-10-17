@@ -6,6 +6,7 @@ import java.util.WeakHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.player.Player;
 
 /**
  * Tick-driven, dimension-scoped census. Only existing loaded living entities
@@ -14,7 +15,9 @@ import net.minecraft.world.entity.PathfinderMob;
  */
 public final class ColonyPopulationRegistry {
     private static final long EXPIRY_TICKS = 400L;
+    private static final long ALARM_HOLD_TICKS = 200L;
     private static final Map<ServerLevel, ColonyPopulationLedger> LEVELS = new WeakHashMap<>();
+    private static final Map<ServerLevel, ColonyAlarmLedger> ALARMS = new WeakHashMap<>();
 
     private ColonyPopulationRegistry() {}
 
@@ -30,6 +33,18 @@ public final class ColonyPopulationRegistry {
         // Nest Core enrollment/spawning; it is not inferred from proximity.
         LEVELS.computeIfAbsent(level, ignored -> new ColonyPopulationLedger())
                 .observe(tag.getLong("SwarmColonyNest"), mob.getUUID(), now);
+        // Threat evidence is a real vanilla target, not a guessed player
+        // location. This only preempts the root's civilian production.
+        if (mob.getTarget() instanceof Player player && player.isAlive()) {
+            ALARMS.computeIfAbsent(level, ignored -> new ColonyAlarmLedger())
+                    .report(tag.getLong("SwarmColonyNest"), now);
+        }
+    }
+
+    public static boolean hasActiveThreat(ServerLevel level, BlockPos root, long now) {
+        if (level == null || root == null) return false;
+        ColonyAlarmLedger ledger = ALARMS.get(level);
+        return ledger != null && ledger.active(root.asLong(), now, ALARM_HOLD_TICKS);
     }
 
     public static int count(ServerLevel level, BlockPos root, long now) {
