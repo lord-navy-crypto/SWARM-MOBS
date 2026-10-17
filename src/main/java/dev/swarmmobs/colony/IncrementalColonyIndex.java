@@ -70,6 +70,10 @@ public final class IncrementalColonyIndex {
     }
 
     public int knownBlocks() { return members.size(); }
+    /** O(1) connectivity membership check without copying a large set. */
+    public boolean contains(ConnectedColonyLayout.Cell position) {
+        return members.contains(Objects.requireNonNull(position));
+    }
     public boolean completeForLoadedRegion() {
         return initialized && pending.isEmpty();
     }
