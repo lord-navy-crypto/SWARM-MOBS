@@ -1,5 +1,7 @@
 package dev.swarmmobs.goal;
 
+import dev.swarmmobs.colony.ColonyPopulationRegistry;
+
 import dev.swarmmobs.agent.SwarmAgentState;
 import dev.swarmmobs.agent.SwarmAgentProfiles;
 import dev.swarmmobs.algorithm.SwarmColonyCastePolicy;
@@ -115,6 +117,7 @@ public final class SwarmIdleNestGoal extends Goal {
     }
 
     private boolean baseEligible(ServerLevel level) {
+        if (!ColonyPopulationRegistry.canPerformCivilianWork(level, zombie)) return false;
         if (!SwarmConfig.ENABLED.get()
                 || !SwarmConfig.NEST_CONSTRUCTION_ENABLED.get()
                 || !zombie.isAlive()

@@ -1,5 +1,7 @@
 package dev.swarmmobs.goal;
 
+import dev.swarmmobs.colony.ColonyPopulationRegistry;
+
 import dev.swarmmobs.agent.SwarmAgentState;
 import dev.swarmmobs.algorithm.SwarmNestSurveyBudget;
 import dev.swarmmobs.colony.SwarmColonyGatherPolicy;
@@ -150,6 +152,7 @@ public final class SwarmZombiePheromoneExploreGoal extends Goal {
     }
 
     private boolean idle(ServerLevel level) {
+        if (!ColonyPopulationRegistry.canPerformCivilianWork(level, zombie)) return false;
         if (!SwarmConfig.ENABLED.get() || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()
                 || !SwarmConfig.NEST_HAULING_ENABLED.get()
                 || !SwarmConfig.NEST_PHEROMONES_ENABLED.get()

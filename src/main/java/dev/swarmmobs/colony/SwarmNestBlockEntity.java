@@ -41,6 +41,16 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     private static final int RESOURCE_RADIUS = 3;
     private static final int[] DX = {2, -2, 0, 0, 2, -2, 2, -2};
     private static final int[] DZ = {0, 0, 2, -2, 2, 2, -2, -2};
+    // True only for an automatically grown Nest Core extension. Never runs
+    // an independent economy/spawner; persisted to prevent duplicate colonies.
+    private boolean connectedExtension;
+    private BlockPos connectedRoot;
+    private BlockPos lastConnectedTip;
+    private long connectedBuiltCount;
+    // Transient loaded-world connectivity cache. Its scan budget is per colony
+    // cycle, not a lifetime block count limit; never saved as phantom capacity.
+    private IncrementalColonyIndex connectedIndex;
+    private long lastConnectedRescanTick;
     private int resources;
     private int chamberLevel;
     // Actual placed shell modules can lag virtual capacity if the visual
@@ -79,6 +89,19 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         super(SwarmNestBlockEntities.NEST.get(), pos, state);
     }
 
+    public boolean isConnectedExtension() { return connectedExtension; }
+    public BlockPos connectedRoot() {
+        return connectedExtension ? connectedRoot : worldPosition;
+    }
+    public void markConnectedExtension(BlockPos root) {
+        if (root == null || root.equals(worldPosition))
+            throw new IllegalArgumentException("invalid extension root");
+        connectedRoot = root.immutable();
+        connectedExtension = true;
+        setChanged();
+    }
+
+    public long connectedBuiltCount() { return connectedBuiltCount; }
     public int resources() { return resources; }
     public int chamberLevel() { return chamberLevel; }
     public int visibleChamberLevel() { return visibleChamberLevel; }
@@ -104,8 +127,16 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     }
 
     public int effectiveCapacity() {
-        return SwarmNestArchitecturePolicy.effectiveCapacity(
+        int base = SwarmNestArchitecturePolicy.effectiveCapacity(
                 chamberLevel, SwarmConfig.NEST_MAX_POPULATION.get());
+        if (connectedExtension || !SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                || connectedIndex == null) return base;
+        long extensions = Math.max(0, connectedIndex.knownBlocks() - 1L);
+        long capacity = ColonyRootPolicy.totalCapacity(
+                base, extensions, SwarmNestArchitecturePolicy.CAPACITY_PER_CHAMBER);
+        // Existing entity counts use int. This is representational saturation,
+        // not a maximum allowed number of connected blocks.
+        return (int) Math.min(Integer.MAX_VALUE, capacity);
     }
     /** Same scarcity judgment shared by scouts, miners, hunters and pheromones. */
     public SwarmNestLaborEconomyPolicy.Targets stockTargets() {
@@ -220,6 +251,12 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
+        connectedExtension = tag.getBoolean("ConnectedExtension");
+        connectedRoot = connectedExtension && tag.contains("ConnectedRoot")
+                ? BlockPos.of(tag.getLong("ConnectedRoot")) : null;
+        lastConnectedTip = tag.contains("LastConnectedTip")
+                ? BlockPos.of(tag.getLong("LastConnectedTip")) : null;
+        connectedBuiltCount = Math.max(0L, tag.getLong("ConnectedBuiltCount"));
         resources = Math.max(0, Math.min(SwarmNestColonyPolicy.MAX_STORED_RESOURCES,
                 tag.getInt("Resources")));
         chamberLevel = Math.max(0, Math.min(SwarmNestArchitecturePolicy.MAX_CHAMBER_LEVEL,
@@ -238,7 +275,9 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         peakPopulation = Math.max(lastPopulation, tag.getInt("PeakPopulation"));
         populationDelta = tag.getInt("PopulationDelta");
         populationSamples = Math.max(0L, tag.getLong("PopulationSamples"));
-        meanPopulation = Math.max(0.0, Math.min(64.0, tag.getDouble("MeanPopulation")));
+        double savedMeanPopulation = tag.getDouble("MeanPopulation");
+        meanPopulation = Double.isFinite(savedMeanPopulation)
+                ? Math.max(0.0, savedMeanPopulation) : 0.0;
         nextSpawnTick = Math.max(0L, tag.getLong("NextSpawnTick"));
         births = Math.max(0L, tag.getLong("Births"));
         hauledItems = Math.max(0L, tag.getLong("HauledItems"));
@@ -251,6 +290,11 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
+        tag.putBoolean("ConnectedExtension", connectedExtension);
+        if (lastConnectedTip != null) tag.putLong("LastConnectedTip", lastConnectedTip.asLong());
+        tag.putLong("ConnectedBuiltCount", connectedBuiltCount);
+        if (connectedExtension && connectedRoot != null)
+            tag.putLong("ConnectedRoot", connectedRoot.asLong());
         tag.putInt("Resources", resources);
         tag.putInt("ChamberLevel", chamberLevel);
         tag.putInt("VisibleChamberLevel", visibleChamberLevel);
@@ -370,7 +414,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     }
 
     public static void tick(Level world, BlockPos pos, BlockState state, SwarmNestBlockEntity core) {
-        if (!(world instanceof ServerLevel level)
+        if (core.connectedExtension || !(world instanceof ServerLevel level)
                 || !SwarmConfig.ENABLED.get()
                 || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()) return;
 
@@ -381,7 +425,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     }
 
     public void runColonyCycle(ServerLevel level) {
-        if (!SwarmConfig.ENABLED.get() || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()
+        if (connectedExtension || !SwarmConfig.ENABLED.get() || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()
                 || level.getBlockEntity(worldPosition) != this
                 || !level.getBlockState(worldPosition).is(SwarmNestBlocks.NEST_CORE.get())) {
             return;
@@ -394,9 +438,21 @@ public final class SwarmNestBlockEntity extends BlockEntity {
                         worldPosition.getZ() + .5) <= 48.0 * 48.0);
         if (!observed) return;
 
+        advanceConnectedIndex(level);
         absorbDroppedResources(level);
         List<PathfinderMob> members = members(level);
         enrollNearbyWorkers(level, members);
+        // UUID observations from all currently ticking loaded residents augment
+        // the local 14-block census. A maximum prevents double counting the
+        // same resident present in both sources.
+        int colonyPopulation = SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                ? Math.max(members.size(),
+                        ColonyPopulationRegistry.count(level, worldPosition, level.getGameTime()))
+                : members.size();
+        boolean colonyUnderAttack = SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                && ColonyPopulationRegistry.hasActiveThreat(
+                        level, worldPosition, level.getGameTime());
+        if (!colonyUnderAttack) tryGrowConnectedCore(level, colonyPopulation);
         assignVisibleLeaders(members);
 
         // When enabled, each module gets two actual shell blocks. Verify
@@ -409,7 +465,10 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         // one such room per 200-tick cycle without charging it twice.
         boolean visible = SwarmConfig.NEST_VISIBLE_EXPANSION_ENABLED.get();
         // Rebuild one missing PAID-FOR shell block before growing again.
-        if (visible && tryRepairVisibleShell(level)) {
+        if (colonyUnderAttack) {
+            // Combat is a colony emergency state, not a worker job.
+            // No new civil construction until the recent alarm clears.
+        } else if (visible && tryRepairVisibleShell(level)) {
             // This cycle was spent repairing; never expand in the same cycle.
         } else if (visible && visibleChamberLevel < chamberLevel) {
             tryPlaceShellModule(level, visibleChamberLevel);
@@ -441,8 +500,9 @@ public final class SwarmNestBlockEntity extends BlockEntity {
                 SwarmConfig.NEST_WORKER_TARGET_SHARE.get(),
                 SwarmConfig.NEST_GUARD_TARGET_SHARE.get(),
                 SwarmConfig.NEST_RESPONSE_THRESHOLD.get());
-        recordPopulationSample(science.population());
+        recordPopulationSample(colonyPopulation);
         SwarmNestScienceTelemetry.record(level, worldPosition, this, science);
+        if (colonyUnderAttack) return;
 
         boolean playerClose = level.players().stream().anyMatch(
                 player -> player.distanceToSqr(
@@ -453,20 +513,40 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         // Cheap resource/cooldown/population gates before reading eight
         // separate positions. Most inactive colonies do zero birth-site IO.
         boolean birthCouldRun = nutrientPoints + legacyPoints >= SwarmNestColonyPolicy.SPAWN_COST
-                && members.size() < effectiveCapacity()
+                && colonyPopulation < effectiveCapacity()
                 && tick >= nextSpawnTick
                 && !playerClose
                 && level.getDifficulty() != Difficulty.PEACEFUL
                 && level.getGameRules().getBoolean(GameRules.RULE_DOMOBSPAWNING);
-        BlockPos birthSite = birthCouldRun ? findSpawnSite(level) : null;
+        BlockPos tipForBirth = null;
+        if (SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                && lastConnectedTip != null && connectedIndex != null
+                && connectedIndex.contains(new ConnectedColonyLayout.Cell(
+                        lastConnectedTip.getX(), lastConnectedTip.getY(),
+                        lastConnectedTip.getZ()))
+                && level.hasChunkAt(lastConnectedTip)
+                && level.getBlockEntity(lastConnectedTip) instanceof SwarmNestBlockEntity tip
+                && tip.isConnectedExtension()
+                && worldPosition.equals(tip.connectedRoot())) {
+            tipForBirth = lastConnectedTip;
+        }
+        // Alternate between original and connected extension sites, so a
+        // large colony can reproduce away from the root without extra cycles.
+        BlockPos birthSite = birthCouldRun
+                ? (SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                    ? ColonyBirthSitePlanner.find(
+                            level, worldPosition, tipForBirth, births % 2L == 0L)
+                    : findSpawnSite(level))
+                : null;
         if (!SwarmNestColonyPolicy.canSpawn(
                 true,
                 level.getGameRules().getBoolean(GameRules.RULE_DOMOBSPAWNING),
                 level.getDifficulty() != Difficulty.PEACEFUL,
                 level.hasChunkAt(worldPosition),
-                observed, playerClose,
+                observed, !SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                        && playerClose,
                 birthSite != null,
-                nutrientPoints + legacyPoints, members.size(),
+                nutrientPoints + legacyPoints, colonyPopulation,
                 effectiveCapacity(), tick, nextSpawnTick)) {
             return;
         }
@@ -705,6 +785,104 @@ public final class SwarmNestBlockEntity extends BlockEntity {
             }
             data.putLong("SwarmColonyNest", worldPosition.asLong());
             data.putString("SwarmColonyDimension", dimension);
+        }
+    }
+
+    /**
+     * Optional physical expansion: one genuine stored-material purchase per
+     * successful block placement, never an extra economy on extensions.
+     * A bounded rotating tip allows unbounded eventual growth without scanning
+     * every previously built core on the server tick.
+     */
+    /**
+     * Explore the loaded, face-connected *owned* Nest Cores incrementally.
+     * Removed or disconnected extensions stop contributing after a rescan.
+     * An unloaded chunk never gets loaded just to inspect colony geometry.
+     */
+    private void advanceConnectedIndex(ServerLevel level) {
+        if (connectedExtension || !SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get())
+            return;
+        var origin = new ConnectedColonyLayout.Cell(
+                worldPosition.getX(), worldPosition.getY(), worldPosition.getZ());
+        long now = level.getGameTime();
+        if (connectedIndex == null) {
+            connectedIndex = new IncrementalColonyIndex(origin);
+            lastConnectedRescanTick = now;
+        } else if (connectedIndex.completeForLoadedRegion()
+                && now - lastConnectedRescanTick >= 2400L) {
+            connectedIndex.reset(origin);
+            lastConnectedRescanTick = now;
+        }
+        // Retry unloaded frontiers only once per cycle, then do bounded work.
+        if (connectedIndex.completeForLoadedRegion() && connectedIndex.hasDeferredFrontier())
+            connectedIndex.retryDeferred();
+        connectedIndex.step(192,
+                cell -> {
+                    BlockPos pos = new BlockPos(cell.x(), cell.y(), cell.z());
+                    return level.isInWorldBounds(pos) && level.hasChunkAt(pos);
+                },
+                cell -> {
+                    BlockPos pos = new BlockPos(cell.x(), cell.y(), cell.z());
+                    if (!level.getBlockState(pos).is(SwarmNestBlocks.NEST_CORE.get()))
+                        return false;
+                    if (pos.equals(worldPosition)) return true;
+                    return level.getBlockEntity(pos) instanceof SwarmNestBlockEntity ext
+                            && ext.isConnectedExtension()
+                            && worldPosition.equals(ext.connectedRoot());
+                });
+    }
+
+    private void tryGrowConnectedCore(ServerLevel level, int localPopulation) {
+        if (connectedExtension || !SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                || !level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)
+                || resources != SwarmNestColonyPolicy.MAX_STORED_RESOURCES
+                || localPopulation < effectiveCapacity()
+                || soilPoints < SwarmNestArchitecturePolicy.SOIL_COST
+                || timberPoints < SwarmNestArchitecturePolicy.TIMBER_COST
+                || playerNearShell(level)) return;
+
+        BlockPos parent = worldPosition;
+        if (lastConnectedTip != null) {
+            // Only follow a loaded tip whose persisted ownership remains intact.
+            if (!level.hasChunkAt(lastConnectedTip)
+                    || !(level.getBlockEntity(lastConnectedTip) instanceof SwarmNestBlockEntity tip)
+                    || !tip.isConnectedExtension()
+                    || !worldPosition.equals(tip.connectedRoot())) return;
+            // A stored tip is not usable if a middle link was destroyed.
+            // Wait for the incremental root-to-tip search to confirm it.
+            if (connectedIndex == null || !connectedIndex.contains(
+                    new ConnectedColonyLayout.Cell(
+                            lastConnectedTip.getX(), lastConnectedTip.getY(),
+                            lastConnectedTip.getZ()))) return;
+            parent = lastConnectedTip;
+        }
+        for (Direction direction : Direction.Plane.HORIZONTAL) {
+            BlockPos site = parent.relative(direction);
+            if (!level.hasChunkAt(site) || !level.isInWorldBounds(site)
+                    || !level.getBlockState(site).isAir()) continue;
+            if (!level.getEntities((net.minecraft.world.entity.Entity) null,
+                    new AABB(site), entity -> entity.isAlive()).isEmpty()) continue;
+            // Root-distance safety does not protect a remote construction tip.
+            if (level.players().stream().anyMatch(player ->
+                    player.isAlive() && !player.isSpectator()
+                            && player.distanceToSqr(site.getX() + .5,
+                            site.getY() + .5, site.getZ() + .5) <= 64.0))
+                continue;
+            if (ColonyPhysicalGrowth.placeOne(level, parent, site,
+                    ColonyPhysicalGrowth.Kind.MONSTER)) {
+                soilPoints -= SwarmNestArchitecturePolicy.SOIL_COST;
+                timberPoints -= SwarmNestArchitecturePolicy.TIMBER_COST;
+                resources -= SwarmNestArchitecturePolicy.SOIL_COST
+                        + SwarmNestArchitecturePolicy.TIMBER_COST;
+                lastConnectedTip = site.immutable();
+                connectedBuiltCount++;
+                // Re-index on the next cycle so the new extension is counted.
+                if (connectedIndex != null) connectedIndex.reset(
+                        new ConnectedColonyLayout.Cell(worldPosition.getX(),
+                                worldPosition.getY(), worldPosition.getZ()));
+                setChanged();
+                return;
+            }
         }
     }
 
