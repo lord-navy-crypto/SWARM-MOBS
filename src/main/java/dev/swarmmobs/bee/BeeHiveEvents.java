@@ -47,9 +47,11 @@ public final class BeeHiveEvents {
         boolean crafted = parentState.is(Blocks.BEEHIVE);
         if (!natural && !crafted) return;
         if (!(level.getBlockEntity(home) instanceof BeehiveBlockEntity hive)
-                || !hive.isFull() || hive.isFireNearby()
-                || parentState.getValue(BeehiveBlock.HONEY_LEVEL)
-                        < BeehiveBlock.MAX_HONEY_LEVELS) return;
+                || !BeeHiveGrowthPolicy.canGrowVanilla(
+                        hive.getOccupantCount(), BeehiveBlockEntity.MAX_OCCUPANTS,
+                        parentState.getValue(BeehiveBlock.HONEY_LEVEL),
+                        BeehiveBlock.MAX_HONEY_LEVELS, !hive.isFireNearby(),
+                        true)) return;
 
         var kind = natural ? ColonyPhysicalGrowth.Kind.BEE_NEST
                 : ColonyPhysicalGrowth.Kind.BEEHIVE;
