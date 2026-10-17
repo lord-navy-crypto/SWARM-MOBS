@@ -1,6 +1,7 @@
 package dev.swarmmobs.colony;
 
 import dev.swarmmobs.agent.SwarmAgentProfiles;
+import dev.swarmmobs.config.SwarmConfig;
 import java.util.Map;
 import java.util.WeakHashMap;
 import net.minecraft.core.BlockPos;
@@ -45,6 +46,22 @@ public final class ColonyPopulationRegistry {
         if (level == null || root == null) return false;
         ColonyAlarmLedger ledger = ALARMS.get(level);
         return ledger != null && ledger.active(root.asLong(), now, ALARM_HOLD_TICKS);
+    }
+
+    /**
+     * A live alarm preempts civilian labor across loaded colony members, but
+     * never sets an enemy target or changes the vanilla attack controller.
+     */
+    public static boolean canPerformCivilianWork(ServerLevel level, PathfinderMob mob) {
+        if (level == null || mob == null
+                || !SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()) return true;
+        var data = mob.getPersistentData();
+        if (!data.contains("SwarmColonyNest")) return true;
+        if (data.contains("SwarmColonyDimension")
+                && !level.dimension().location().toString()
+                        .equals(data.getString("SwarmColonyDimension"))) return true;
+        return !hasActiveThreat(level, BlockPos.of(data.getLong("SwarmColonyNest")),
+                level.getGameTime());
     }
 
     public static int count(ServerLevel level, BlockPos root, long now) {
