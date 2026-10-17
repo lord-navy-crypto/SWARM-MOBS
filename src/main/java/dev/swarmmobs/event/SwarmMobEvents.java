@@ -1,5 +1,6 @@
 package dev.swarmmobs.event;
 
+import dev.swarmmobs.colony.ColonyPopulationRegistry;
 import dev.swarmmobs.agent.SwarmAgentProfile;
 import dev.swarmmobs.agent.SwarmBehaviorMode;
 import dev.swarmmobs.agent.SwarmAgentProfiles;
@@ -135,12 +136,19 @@ public final class SwarmMobEvents {
                 || !SwarmAgentProfiles.isSupported(mob)) {
             return;
         }
-        if (!(mob.level() instanceof ServerLevel level) || mob.isNoAi() || !mob.isAlive()) {
+        if (!(mob.level() instanceof ServerLevel level) || !mob.isAlive()) {
             return;
         }
 
-        SwarmAgentState state = mob.getData(SwarmAttachments.AGENT_STATE.get());
         long gameTick = level.getGameTime();
+        // Census is cheap and independent of combat planning cadence.
+        // NoAI entities can still be real resident mobs in test worlds.
+        if (SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()) {
+            ColonyPopulationRegistry.observe(level, mob, gameTick);
+        }
+        if (mob.isNoAi()) return;
+
+        SwarmAgentState state = mob.getData(SwarmAttachments.AGENT_STATE.get());
         int interval = SwarmConfig.PLAN_INTERVAL_TICKS.get();
 
         if (!state.planningScheduleInitialized()) {
