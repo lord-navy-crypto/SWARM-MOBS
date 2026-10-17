@@ -275,7 +275,9 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         peakPopulation = Math.max(lastPopulation, tag.getInt("PeakPopulation"));
         populationDelta = tag.getInt("PopulationDelta");
         populationSamples = Math.max(0L, tag.getLong("PopulationSamples"));
-        meanPopulation = Math.max(0.0, Math.min(64.0, tag.getDouble("MeanPopulation")));
+        double savedMeanPopulation = tag.getDouble("MeanPopulation");
+        meanPopulation = Double.isFinite(savedMeanPopulation)
+                ? Math.max(0.0, savedMeanPopulation) : 0.0;
         nextSpawnTick = Math.max(0L, tag.getLong("NextSpawnTick"));
         births = Math.max(0L, tag.getLong("Births"));
         hauledItems = Math.max(0L, tag.getLong("HauledItems"));
@@ -779,7 +781,8 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         if (connectedIndex == null) {
             connectedIndex = new IncrementalColonyIndex(origin);
             lastConnectedRescanTick = now;
-        } else if (now - lastConnectedRescanTick >= 2400L) {
+        } else if (connectedIndex.completeForLoadedRegion()
+                && now - lastConnectedRescanTick >= 2400L) {
             connectedIndex.reset(origin);
             lastConnectedRescanTick = now;
         }
