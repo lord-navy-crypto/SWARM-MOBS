@@ -42,3 +42,25 @@
 - `nestConnectedCoreGrowthEnabled` remains **false** by default.
 - No claim/region protection integration yet. Keep experimental growth off
   on servers with protected building areas.
+
+## Civilian work interruption wired into existing Goals
+A loaded member of an opt-in connected nest now checks the most recent
+root alarm at the entry/continuation guard of each civilian Goal:
+- Zombie hauling, block gathering, hunting, berry foraging and pheromone
+  exploration.
+- Spider resource scouting.
+- Zombie idle nest founding.
+
+These actions suspend while an eligible root alarm is active. Combat
+Goals (vanilla zombie/spider melee, skeleton bow, creeper fuse, and combat
+engineering) are intentionally untouched. This is a *civilian work
+interruption*, not instantaneous targeting or a promise that all loaded
+members will physically reach the battle: existing local target relays
+and Minecraft navigation still decide that.
+
+Limitations: only resident mobs with existing assigned root NBT are
+affected; the root alarm is based on real mob -> living Player targeting,
+not damage to arbitrary blocks. A future damage event can publish an
+independent alarm once authoritative ownership is reliably resolved.
+The real emergency feature remains controlled by the optional
+`nestConnectedCoreGrowthEnabled` flag, default false.
