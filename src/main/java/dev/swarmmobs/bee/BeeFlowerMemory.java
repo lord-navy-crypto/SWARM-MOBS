@@ -25,6 +25,8 @@ public final class BeeFlowerMemory {
             throw new IllegalArgumentException("invalid flower observation");
         Map<Long, Observation> patches = byHive.computeIfAbsent(
                 hive, unused -> new HashMap<>());
+        Observation existing = patches.get(flower);
+        if (existing != null && now < existing.seenAt()) return;
         patches.put(flower, new Observation(utility, now));
         if (patches.size() > MAX_REMEMBERED_FLOWERS_PER_HIVE) {
             long oldest = patches.entrySet().stream()
@@ -76,4 +78,9 @@ public final class BeeFlowerMemory {
     }
 
     public int rememberedHives() { return byHive.size(); }
+
+    public int rememberedFlowers(long hive) {
+        Map<Long, Observation> observations = byHive.get(hive);
+        return observations == null ? 0 : observations.size();
+    }
 }
