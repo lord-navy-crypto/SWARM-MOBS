@@ -1,5 +1,6 @@
 package dev.swarmmobs;
 
+import dev.swarmmobs.bee.BeeHiveEvents;
 import dev.swarmmobs.command.SwarmCommands;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.data.SwarmAttachments;
@@ -33,6 +34,7 @@ public final class SwarmMobs {
 
         NeoForge.EVENT_BUS.addListener(SwarmMobEvents::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(SwarmMobEvents::onEntityTick);
+        NeoForge.EVENT_BUS.addListener(BeeHiveEvents::onEntityTick);
         NeoForge.EVENT_BUS.addListener(SwarmCommands::onRegisterCommands);
 
         LOGGER.info("Swarm Mobs {} initialized: deterministic swarm control active; local Ollama AI Shadow Mode available and OFF by default.",
