@@ -1,5 +1,7 @@
 package dev.swarmmobs.goal;
 
+import dev.swarmmobs.colony.ColonyPopulationRegistry;
+
 import dev.swarmmobs.agent.SwarmAgentState;
 import dev.swarmmobs.algorithm.SwarmNestSurveyBudget;
 import dev.swarmmobs.colony.SwarmNestBlockEntity;
@@ -184,6 +186,7 @@ public final class SwarmSpiderColonyScoutGoal extends Goal {
     }
 
     private boolean idle(ServerLevel level) {
+        if (!ColonyPopulationRegistry.canPerformCivilianWork(level, spider)) return false;
         if (!SwarmConfig.ENABLED.get() || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()
                 || !SwarmConfig.NEST_HAULING_ENABLED.get()
                 || !level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)
