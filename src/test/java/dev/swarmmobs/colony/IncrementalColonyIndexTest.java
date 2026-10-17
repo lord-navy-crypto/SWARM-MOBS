@@ -77,4 +77,18 @@ class IncrementalColonyIndexTest {
         assertTrue(visited <= 224, "Each of 64 cells plus its 160 unique boundary cells is inspected once");
     }
 
+    @Test void membershipLookupChangesAfterBrokenBridgeRescan() {
+        var start = new ConnectedColonyLayout.Cell(0, 64, 0);
+        var middle = new ConnectedColonyLayout.Cell(1, 64, 0);
+        var end = new ConnectedColonyLayout.Cell(2, 64, 0);
+        var index = new IncrementalColonyIndex(start);
+        index.step(50, c -> true, c -> c.y() == 64 && c.z() == 0
+                && c.x() >= 0 && c.x() <= 2);
+        assertTrue(index.contains(end));
+        index.reset(start);
+        index.step(50, c -> true, c -> c.equals(start) || c.equals(end));
+        assertFalse(index.contains(end));
+        assertFalse(index.contains(middle));
+    }
+
 }
