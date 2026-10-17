@@ -4,6 +4,7 @@ import dev.swarmmobs.agent.SwarmAgentProfiles;
 import dev.swarmmobs.config.SwarmConfig;
 import java.util.Map;
 import java.util.WeakHashMap;
+import dev.swarmmobs.registry.SwarmNestBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.PathfinderMob;
@@ -38,8 +39,35 @@ public final class ColonyPopulationRegistry {
         // location. This only preempts the root's civilian production.
         if (mob.getTarget() instanceof Player player && player.isAlive()) {
             ALARMS.computeIfAbsent(level, ignored -> new ColonyAlarmLedger())
-                    .report(tag.getLong("SwarmColonyNest"), now);
+                    .report(tag.getLong("SwarmColonyNest"), now,
+                            mob.blockPosition().asLong());
         }
+    }
+
+    /**
+     * Returns only the observed resident's own incident location, never the
+     * enemy location. All world reads must be in already loaded chunks.
+     */
+    public static BlockPos localRallySite(ServerLevel level, PathfinderMob mob) {
+        if (level == null || mob == null
+                || !SwarmConfig.NEST_COLONY_RALLY_ENABLED.get()) return null;
+        var tag = mob.getPersistentData();
+        if (!tag.contains("SwarmColonyNest")
+                || (tag.contains("SwarmColonyDimension")
+                    && !level.dimension().location().toString()
+                            .equals(tag.getString("SwarmColonyDimension")))) return null;
+        BlockPos root = BlockPos.of(tag.getLong("SwarmColonyNest"));
+        if (!level.hasChunkAt(root)
+                || !level.getBlockState(root).is(SwarmNestBlocks.NEST_CORE.get())
+                || !(level.getBlockEntity(root) instanceof SwarmNestBlockEntity core)
+                || core.isConnectedExtension()) return null;
+        ColonyAlarmLedger alarms = ALARMS.get(level);
+        if (alarms == null) return null;
+        var incident = alarms.witnessPosition(root.asLong(),
+                level.getGameTime(), ALARM_HOLD_TICKS);
+        if (incident.isEmpty()) return null;
+        BlockPos at = BlockPos.of(incident.getAsLong());
+        return level.isInWorldBounds(at) && level.hasChunkAt(at) ? at : null;
     }
 
     public static boolean hasActiveThreat(ServerLevel level, BlockPos root, long now) {
@@ -54,7 +82,8 @@ public final class ColonyPopulationRegistry {
      */
     public static boolean canPerformCivilianWork(ServerLevel level, PathfinderMob mob) {
         if (level == null || mob == null
-                || !SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()) return true;
+                || !(SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                    || SwarmConfig.NEST_COLONY_RALLY_ENABLED.get())) return true;
         var data = mob.getPersistentData();
         if (!data.contains("SwarmColonyNest")) return true;
         if (data.contains("SwarmColonyDimension")
