@@ -449,7 +449,10 @@ public final class SwarmNestBlockEntity extends BlockEntity {
                 ? Math.max(members.size(),
                         ColonyPopulationRegistry.count(level, worldPosition, level.getGameTime()))
                 : members.size();
-        tryGrowConnectedCore(level, colonyPopulation);
+        boolean colonyUnderAttack = SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                && ColonyPopulationRegistry.hasActiveThreat(
+                        level, worldPosition, level.getGameTime());
+        if (!colonyUnderAttack) tryGrowConnectedCore(level, colonyPopulation);
         assignVisibleLeaders(members);
 
         // When enabled, each module gets two actual shell blocks. Verify
@@ -462,7 +465,10 @@ public final class SwarmNestBlockEntity extends BlockEntity {
         // one such room per 200-tick cycle without charging it twice.
         boolean visible = SwarmConfig.NEST_VISIBLE_EXPANSION_ENABLED.get();
         // Rebuild one missing PAID-FOR shell block before growing again.
-        if (visible && tryRepairVisibleShell(level)) {
+        if (colonyUnderAttack) {
+            // Combat is a colony emergency state, not a worker job.
+            // No new civil construction until the recent alarm clears.
+        } else if (visible && tryRepairVisibleShell(level)) {
             // This cycle was spent repairing; never expand in the same cycle.
         } else if (visible && visibleChamberLevel < chamberLevel) {
             tryPlaceShellModule(level, visibleChamberLevel);
@@ -496,6 +502,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
                 SwarmConfig.NEST_RESPONSE_THRESHOLD.get());
         recordPopulationSample(colonyPopulation);
         SwarmNestScienceTelemetry.record(level, worldPosition, this, science);
+        if (colonyUnderAttack) return;
 
         boolean playerClose = level.players().stream().anyMatch(
                 player -> player.distanceToSqr(
@@ -511,13 +518,33 @@ public final class SwarmNestBlockEntity extends BlockEntity {
                 && !playerClose
                 && level.getDifficulty() != Difficulty.PEACEFUL
                 && level.getGameRules().getBoolean(GameRules.RULE_DOMOBSPAWNING);
-        BlockPos birthSite = birthCouldRun ? findSpawnSite(level) : null;
+        BlockPos tipForBirth = null;
+        if (SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                && lastConnectedTip != null && connectedIndex != null
+                && connectedIndex.contains(new ConnectedColonyLayout.Cell(
+                        lastConnectedTip.getX(), lastConnectedTip.getY(),
+                        lastConnectedTip.getZ()))
+                && level.hasChunkAt(lastConnectedTip)
+                && level.getBlockEntity(lastConnectedTip) instanceof SwarmNestBlockEntity tip
+                && tip.isConnectedExtension()
+                && worldPosition.equals(tip.connectedRoot())) {
+            tipForBirth = lastConnectedTip;
+        }
+        // Alternate between original and connected extension sites, so a
+        // large colony can reproduce away from the root without extra cycles.
+        BlockPos birthSite = birthCouldRun
+                ? (SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                    ? ColonyBirthSitePlanner.find(
+                            level, worldPosition, tipForBirth, births % 2L == 0L)
+                    : findSpawnSite(level))
+                : null;
         if (!SwarmNestColonyPolicy.canSpawn(
                 true,
                 level.getGameRules().getBoolean(GameRules.RULE_DOMOBSPAWNING),
                 level.getDifficulty() != Difficulty.PEACEFUL,
                 level.hasChunkAt(worldPosition),
-                observed, playerClose,
+                observed, !SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                        && playerClose,
                 birthSite != null,
                 nutrientPoints + legacyPoints, colonyPopulation,
                 effectiveCapacity(), tick, nextSpawnTick)) {
@@ -835,6 +862,12 @@ public final class SwarmNestBlockEntity extends BlockEntity {
                     || !level.getBlockState(site).isAir()) continue;
             if (!level.getEntities((net.minecraft.world.entity.Entity) null,
                     new AABB(site), entity -> entity.isAlive()).isEmpty()) continue;
+            // Root-distance safety does not protect a remote construction tip.
+            if (level.players().stream().anyMatch(player ->
+                    player.isAlive() && !player.isSpectator()
+                            && player.distanceToSqr(site.getX() + .5,
+                            site.getY() + .5, site.getZ() + .5) <= 64.0))
+                continue;
             if (ColonyPhysicalGrowth.placeOne(level, parent, site,
                     ColonyPhysicalGrowth.Kind.MONSTER)) {
                 soilPoints -= SwarmNestArchitecturePolicy.SOIL_COST;
