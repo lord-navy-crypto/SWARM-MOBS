@@ -50,6 +50,7 @@ import dev.swarmmobs.ai.SwarmAiTaskDemandPolicy;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.data.SwarmAttachments;
 import dev.swarmmobs.debug.SwarmDebugParticles;
+import dev.swarmmobs.goal.SwarmColonyRallyGoal;
 import dev.swarmmobs.goal.SwarmApproachGoal;
 import dev.swarmmobs.goal.SwarmIdleNestGoal;
 import dev.swarmmobs.goal.SwarmZombieColonyHaulGoal;
@@ -112,6 +113,8 @@ public final class SwarmMobEvents {
         }
 
         mob.goalSelector.addGoal(1, new SwarmApproachGoal(mob));
+        // Mobilization is intentionally below all direct combat handoffs.
+        mob.goalSelector.addGoal(5, new SwarmColonyRallyGoal(mob));
         if (mob instanceof Zombie builder) {
             mob.goalSelector.addGoal(2, new SwarmIdleNestGoal(builder));
             // Voluntary local-worker foraging yields to vanilla combat and
@@ -143,7 +146,8 @@ public final class SwarmMobEvents {
         long gameTick = level.getGameTime();
         // Census is cheap and independent of combat planning cadence.
         // NoAI entities can still be real resident mobs in test worlds.
-        if (SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()) {
+        if (SwarmConfig.NEST_CONNECTED_CORE_GROWTH_ENABLED.get()
+                || SwarmConfig.NEST_COLONY_RALLY_ENABLED.get()) {
             ColonyPopulationRegistry.observe(level, mob, gameTick);
         }
         if (mob.isNoAi()) return;
