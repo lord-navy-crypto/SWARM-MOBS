@@ -26,4 +26,18 @@ public final class BeeHiveGrowthPolicy {
                 && s.adjacentFreeSites() > 0
                 && s.extensions() < s.maxExtensions();
     }
+    /**
+     * Vanilla-only prototype: one hive may build a neighbor when full of
+     * occupants and at full honey level. No lifetime extension count cap.
+     * The caller separately checks world permissions and air placement.
+     */
+    public static boolean canGrowVanilla(int occupants, int hiveCapacity,
+                                         int honeyLevel, int fullHoneyLevel,
+                                         boolean calm, boolean hasAirSite) {
+        if (occupants < 0 || hiveCapacity < 1 || honeyLevel < 0
+                || fullHoneyLevel < 1)
+            throw new IllegalArgumentException("invalid vanilla hive readings");
+        return occupants >= hiveCapacity && honeyLevel >= fullHoneyLevel
+                && calm && hasAirSite;
+    }
 }
