@@ -2,6 +2,7 @@ package dev.swarmmobs.gametest;
 
 import dev.swarmmobs.SwarmMobs;
 import dev.swarmmobs.colony.ColonyPhysicalGrowth;
+import dev.swarmmobs.colony.ColonyBirthSitePlanner;
 import dev.swarmmobs.colony.ColonyPopulationRegistry;
 import net.minecraft.world.entity.EntityType;
 import dev.swarmmobs.colony.SwarmNestBlockEntity;
@@ -107,6 +108,38 @@ public final class ConnectedColonyGameTests {
         if (ColonyPopulationRegistry.count(level, home, level.getGameTime()) != 2
                 || ColonyPopulationRegistry.count(level, unrelated, level.getGameTime()) != 1) {
             helper.fail("Census counted duplicate or foreign colony members");
+            return;
+        }
+        helper.succeed();
+    }
+
+    @PrefixGameTestTemplate(false)
+    @GameTest(batch = "swarm_colony_birth", templateNamespace = SwarmMobs.MOD_ID,
+            template = TEMPLATE, timeoutTicks = 40)
+    public static void breedingPlannerRequiresRealAirAndSolidFoundation(GameTestHelper helper) {
+        var anchor = new BlockPos(2, 1, 2);
+        // Remove any template floors around the eight existing birth sites.
+        int[] dx = {2, -2, 0, 0, 2, -2, 2, -2};
+        int[] dz = {0, 0, 2, -2, 2, 2, -2, -2};
+        for (int i = 0; i < dx.length; i++) {
+            helper.setBlock(new BlockPos(anchor.getX() + dx[i], 0,
+                    anchor.getZ() + dz[i]), Blocks.AIR);
+        }
+        var foundation = new BlockPos(4, 0, 2);
+        var feet = foundation.above();
+        helper.setBlock(foundation, Blocks.STONE);
+        helper.setBlock(feet, Blocks.AIR);
+        helper.setBlock(feet.above(), Blocks.AIR);
+        var planned = ColonyBirthSitePlanner.find(helper.getLevel(),
+                helper.absolutePos(anchor), null, false);
+        if (!helper.absolutePos(feet).equals(planned)) {
+            helper.fail("Breeding planner missed a valid loaded grounded site");
+            return;
+        }
+        helper.setBlock(feet.above(), Blocks.STONE);
+        if (ColonyBirthSitePlanner.find(helper.getLevel(),
+                helper.absolutePos(anchor), null, false) != null) {
+            helper.fail("Breeding planner accepted obstructed headroom");
             return;
         }
         helper.succeed();
