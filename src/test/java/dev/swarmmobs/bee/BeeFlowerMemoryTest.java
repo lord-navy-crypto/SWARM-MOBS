@@ -29,7 +29,15 @@ class BeeFlowerMemoryTest {
         assertTrue(m.suggest(1199L, 100L).isPresent());
         for (int i = 0; i < 100; i++) m.report(1199L, 10000L + i, 1, 101L + i);
         assertEquals(BeeFlowerMemory.MAX_REMEMBERED_FLOWERS_PER_HIVE,
-                16);
+                m.rememberedFlowers(1199L));
+    }
+
+    @Test void outdatedReportsCannotOverwriteARecentFlowerSighting() {
+        var m = new BeeFlowerMemory();
+        m.report(55, 66, .9, 1000L);
+        m.report(55, 66, .1, 100L);
+        assertEquals(66L, m.suggest(55, 1001L).orElseThrow());
+        assertTrue(m.suggest(55, 3400L).isEmpty());
     }
 
     @Test void rejectsFictionalUtility() {
