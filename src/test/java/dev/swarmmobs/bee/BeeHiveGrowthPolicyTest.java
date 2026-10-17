@@ -20,4 +20,19 @@ class BeeHiveGrowthPolicyTest {
         assertFalse(BeeHiveGrowthPolicy.canExpand(
                 new BeeHiveGrowthPolicy.State(3, 3, 70, 30, 12, 10, 2, 6, 6)));
     }
+    @Test void vanillaHiveGrowthRequiresOccupiedHomeAndFullHoney() {
+        assertTrue(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 5, 5, true, true));
+        assertFalse(BeeHiveGrowthPolicy.canGrowVanilla(2, 3, 5, 5, true, true));
+        assertFalse(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 4, 5, true, true));
+        assertFalse(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 5, 5, false, true));
+        assertFalse(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 5, 5, true, false));
+    }
+
+    @Test void vanillaHiveGrowthDoesNotEnforceLifetimeStructureLimit() {
+        for (int oldExtensions : new int[]{0, 8, 1000, 100_000}) {
+            // Vanilla rule intentionally has no total-extension argument.
+            assertTrue(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 5, 5, true, true));
+        }
+    }
+
 }
