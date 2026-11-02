@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
 
 /** Bounded transient cache and overflow-slot reservations for vanilla hive colonies. */
 public final class BeeHiveColonyMemory {
