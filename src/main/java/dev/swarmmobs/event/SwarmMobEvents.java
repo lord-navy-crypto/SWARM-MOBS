@@ -370,7 +370,7 @@ public final class SwarmMobEvents {
         // mod's supported mobs. Apply the profile only while that same player
         // is directly selected; no hidden target location is consulted.
         var learnedPlayerStyle = SwarmPlayerStylePolicy.choose(
-                selection.player() == null ? null
+                !selection.direct() || selection.player() == null ? null
                         : SwarmPlayerStyleRegistry.snapshot(
                                 level, selection.player().getUUID(), gameTick),
                 SwarmConfig.PLAYER_LEARNING_ENABLED.get());

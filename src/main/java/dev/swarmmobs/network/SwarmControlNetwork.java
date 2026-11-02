@@ -84,7 +84,7 @@ public final class SwarmControlNetwork {
             }
             if ("player_learning_toggle".equals(absoluteAction)
                     && payload.value() < 0.5) {
-                SwarmPlayerStyleRegistry.clear(player.serverLevel());
+                SwarmPlayerStyleRegistry.clearAll();
             }
             SwarmExperimentManager.markCustom();
         } else {
@@ -257,7 +257,7 @@ public final class SwarmControlNetwork {
             }
 
             case "player_learning_reset" ->
-                    SwarmPlayerStyleRegistry.clear(player.serverLevel());
+                    SwarmPlayerStyleRegistry.clearAll();
 
             case "preset_baseline" -> SwarmExperimentManager.apply(SwarmExperimentPreset.BASELINE);
             case "preset_noisy_sensing" -> SwarmExperimentManager.apply(SwarmExperimentPreset.NOISY_SENSING);

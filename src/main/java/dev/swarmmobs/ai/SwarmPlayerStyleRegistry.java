@@ -176,6 +176,10 @@ public final class SwarmPlayerStyleRegistry {
         if (level != null) LEVELS.remove(level);
     }
 
+    public static synchronized void clearAll() {
+        LEVELS.clear();
+    }
+
     private static void expire(LinkedHashMap<UUID, MutableProfile> profiles, long now) {
         profiles.entrySet().removeIf(entry ->
                 now - entry.getValue().lastObservedTick > PROFILE_TTL_TICKS);
