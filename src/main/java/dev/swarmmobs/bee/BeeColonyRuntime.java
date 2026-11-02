@@ -10,6 +10,8 @@ public final class BeeColonyRuntime {
     private static final Map<ServerLevel, BeeFlowerMemory> FLOWERS = new WeakHashMap<>();
     private static final Map<ServerLevel, BeeTaskMemory> TASKS = new WeakHashMap<>();
     private static final Map<ServerLevel, BeeForagingCycleMemory> CYCLES = new WeakHashMap<>();
+    private static final Map<ServerLevel, BeeHiveColonyMemory> HIVES = new WeakHashMap<>();
+    private static final Map<ServerLevel, BeeHiveGrowthMemory> GROWTH = new WeakHashMap<>();
 
     public static BeeHiveAlarmMemory alarms(ServerLevel level) {
         return ALARMS.computeIfAbsent(level, unused -> new BeeHiveAlarmMemory());
@@ -25,6 +27,14 @@ public final class BeeColonyRuntime {
 
     public static BeeForagingCycleMemory cycles(ServerLevel level) {
         return CYCLES.computeIfAbsent(level, unused -> new BeeForagingCycleMemory());
+    }
+
+    public static BeeHiveColonyMemory hives(ServerLevel level) {
+        return HIVES.computeIfAbsent(level, unused -> new BeeHiveColonyMemory());
+    }
+
+    public static BeeHiveGrowthMemory growth(ServerLevel level) {
+        return GROWTH.computeIfAbsent(level, unused -> new BeeHiveGrowthMemory());
     }
 
     private BeeColonyRuntime() {}

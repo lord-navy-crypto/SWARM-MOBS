@@ -55,17 +55,26 @@ public final class BeeFlowerEvents {
                     cycle.completedHive(), cycle.completedFlower(), 0.8, now);
         }
 
+        if (hiveGrowth && !bee.hasNectar() && savedFlower == null
+                && !bee.hasStung() && bee.getTarget() == null
+                && Math.floorMod(now + bee.getId(), 20L) == 0L) {
+            BeeHiveColonyRouter.routeOverflowBee(level, bee, now);
+            home = bee.getHivePos();
+            if (home == null || !level.hasChunkAt(home) || !isVanillaHive(level, home)) return;
+        }
+
+        final BlockPos activeHome = home;
         if (!flowerRecruitment
                 || Math.floorMod(now + bee.getId(), OBSERVATION_INTERVAL) != 0) return;
 
         if (SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get()
                 && BeeColonyRuntime.alarms(level)
-                        .active(home.asLong(), now, BeeColonyEvents.ALARM_HOLD_TICKS).isPresent()) {
+                        .active(activeHome.asLong(), now, BeeColonyEvents.ALARM_HOLD_TICKS).isPresent()) {
             return;
         }
         if (level.players().stream().noneMatch(player ->
                 !player.isSpectator() && player.distanceToSqr(
-                        home.getX() + 0.5, home.getY() + 0.5, home.getZ() + 0.5)
+                        activeHome.getX() + 0.5, activeHome.getY() + 0.5, activeHome.getZ() + 0.5)
                         <= 48.0 * 48.0)) return;
 
         // Do not override a loaded nectar delivery, vanilla sting response,
@@ -73,7 +82,7 @@ public final class BeeFlowerEvents {
         // saved flower destination after repeated completed trips.
         if (bee.hasNectar() || bee.hasStung() || bee.getTarget() != null) return;
 
-        BeeTaskPolicy.Needs needs = colonyNeeds(level, home,
+        BeeTaskPolicy.Needs needs = colonyNeeds(level, activeHome,
                 cycle.fatigue(), SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get(),
                 hiveGrowth);
         BeeTaskPolicy.Task task = BeeColonyRuntime.tasks(level).assign(
@@ -105,58 +114,66 @@ public final class BeeFlowerEvents {
         if (task != BeeTaskPolicy.Task.FORAGE) return;
 
         BlockPos candidate = choose(BeeColonyRuntime.flowers(level), level,
-                home, bee.blockPosition(), now, needs.nectarShortage());
+                activeHome, bee.blockPosition(), now, needs.nectarShortage());
         if (candidate != null) bee.setSavedFlowerPos(candidate);
     }
 
     static BeeTaskPolicy.Needs colonyNeeds(ServerLevel level, BlockPos home,
             double fatigue, boolean guardEnabled, boolean buildEnabled) {
+        long now = level.getGameTime();
         var state = level.getBlockState(home);
         int honey = state.hasProperty(BeehiveBlock.HONEY_LEVEL)
                 ? state.getValue(BeehiveBlock.HONEY_LEVEL) : 0;
-        int occupants = level.getBlockEntity(home) instanceof BeehiveBlockEntity hive
+        int localOccupants = level.getBlockEntity(home) instanceof BeehiveBlockEntity hive
                 ? hive.getOccupantCount() : 0;
+        int occupants = localOccupants;
+        int capacity = BeehiveBlockEntity.MAX_OCCUPANTS;
+        boolean hasExpansionSite = false;
+
+        if (buildEnabled) {
+            BeeHiveColonySnapshot.Snapshot colony = BeeColonyRuntime.hives(level).snapshot(
+                    level, home, now, SwarmConfig.BEE_HIVE_MAX_EXTENSIONS.get() + 1);
+            if (colony.complete() && !colony.overflow()) {
+                occupants = colony.occupants();
+                capacity = colony.capacity();
+                hasExpansionSite = BeeHiveEvents.hasAvailableExpansionSite(level, colony);
+            }
+        }
+
         int threats = guardEnabled
                 ? level.getEntitiesOfClass(Monster.class,
                         new AABB(home).inflate(10.0), Monster::isAlive).size()
                 : 0;
         double nectarShortage = 1.0 - honey / (double) BeehiveBlock.MAX_HONEY_LEVELS;
-        double spaceShortage = buildEnabled && hasAdjacentExpansionSite(level, home)
-                ? Math.min(1.0, occupants / (double) BeehiveBlockEntity.MAX_OCCUPANTS)
-                : 0.0;
+        boolean colonyFull = occupants >= capacity;
+        double spaceShortage = buildEnabled && colonyFull && hasExpansionSite ? 1.0 : 0.0;
         double threat = Math.min(1.0, threats / 3.0);
-        // A full hive cannot admit a resting Bee. Let BUILD handle it when a
-        // safe extension site exists; otherwise keep the worker available to forage.
-        double fatigueNeed = occupants >= BeehiveBlockEntity.MAX_OCCUPANTS
-                ? 0.0 : fatigue;
-        // Brood demand is deliberately zero: vanilla exposes no reliable brood
-        // count or nursing signal, so the model does not infer it from occupancy.
-        return new BeeTaskPolicy.Needs(nectarShortage, 0.0, threat,
-                spaceShortage, fatigueNeed);
-    }
-
-    private static boolean hasAdjacentExpansionSite(ServerLevel level, BlockPos home) {
-        for (Direction direction : Direction.Plane.HORIZONTAL) {
-            BlockPos site = home.relative(direction);
-            if (!level.isInWorldBounds(site) || !level.hasChunkAt(site)
-                    || !level.getBlockState(site).isAir()
-                    || !level.getFluidState(site).isEmpty()) continue;
-            if (level.getEntities((Entity) null, new AABB(site),
-                    entity -> entity.isAlive()).isEmpty()) return true;
-        }
-        return false;
+        double fatigueNeed = colonyFull ? 0.0 : fatigue;
+        // Vanilla exposes no reliable brood sensor, so NURSE is not inferred.
+        return new BeeTaskPolicy.Needs(nectarShortage, 0.0, threat, spaceShortage, fatigueNeed);
     }
 
     private static BlockPos choose(BeeFlowerMemory shared, ServerLevel level,
             BlockPos home, BlockPos receiver, long now, double receiverNeed) {
+        BeeHiveColonySnapshot.Snapshot colony = BeeColonyRuntime.hives(level).snapshot(
+                level, home, now, SwarmConfig.BEE_HIVE_MAX_EXTENSIONS.get() + 1);
+        if (colony.complete() && !colony.overflow()) {
+            // Flower knowledge propagates across the entire connected hive colony.
+            for (BeeHiveColonySnapshot.Hive hive : colony.hives()) {
+                BlockPos result = selectFrom(shared, level, hive.position(),
+                        home, receiver, now, receiverNeed);
+                if (result != null) return result;
+            }
+            return null;
+        }
+
         BlockPos result = selectFrom(shared, level, home, home, receiver, now, receiverNeed);
         if (result != null) return result;
-        // Only directly adjacent vanilla hives share observations.
+        // Incomplete/unloaded boundaries fall back to conservative one-hop sharing.
         for (Direction direction : Direction.values()) {
             BlockPos neighborHive = home.relative(direction);
             if (level.hasChunkAt(neighborHive) && isVanillaHive(level, neighborHive)) {
-                result = selectFrom(shared, level, neighborHive, home, receiver, now,
-                        receiverNeed);
+                result = selectFrom(shared, level, neighborHive, home, receiver, now, receiverNeed);
                 if (result != null) return result;
             }
         }
@@ -178,7 +195,6 @@ public final class BeeFlowerEvents {
             }
             double distance = Math.sqrt(receiver.distSqr(flower));
             if (distance * distance > MAX_FLOWER_DIST_SQ) continue;
-
             int nearbyBees = level.getEntitiesOfClass(Bee.class,
                     new AABB(flower).inflate(6.0), Bee::isAlive).size();
             int nearbyThreats = level.getEntitiesOfClass(Monster.class,
@@ -189,11 +205,11 @@ public final class BeeFlowerEvents {
                     observation.utility(), observation.utility(), distance,
                     competition, danger, observation.confidence());
             double score = BeeForagePolicy.score(patch);
-            double recruitmentPriority = BeeRecruitmentPolicy.priority(
+            double priority = BeeRecruitmentPolicy.priority(
                     score, observation.confidence(), receiverNeed, competition);
-            if (recruitmentPriority > bestScore || (recruitmentPriority == bestScore
+            if (priority > bestScore || (priority == bestScore
                     && (bestPosition == null || flower.asLong() < bestPosition.asLong()))) {
-                bestScore = recruitmentPriority;
+                bestScore = priority;
                 bestPosition = flower;
             }
         }

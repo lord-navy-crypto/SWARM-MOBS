@@ -4,46 +4,26 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BeeHiveGrowthPolicyTest {
-    @Test void fullHiveWithSurplusAndWaxMayGrow() {
-        assertTrue(BeeHiveGrowthPolicy.canExpand(
-                new BeeHiveGrowthPolicy.State(3, 3, 70, 30, 12, 10, 2, 0, 6)));
+    @Test void expansionRequiresFullConnectedHousingAndHoneyAboveReserve() {
+        assertTrue(BeeHiveGrowthPolicy.canExpand(new BeeHiveGrowthPolicy.State(6,6,8,6,2,2,1,0,8)));
+        assertFalse(BeeHiveGrowthPolicy.canExpand(new BeeHiveGrowthPolicy.State(5,6,8,6,2,2,1,0,8)));
+        assertFalse(BeeHiveGrowthPolicy.canExpand(new BeeHiveGrowthPolicy.State(6,6,6,6,2,2,1,0,8)));
     }
-
-    @Test void conserveHoneyNeededForSurvival() {
-        assertFalse(BeeHiveGrowthPolicy.canExpand(
-                new BeeHiveGrowthPolicy.State(3, 3, 30, 30, 12, 10, 2, 0, 6)));
+    @Test void expansionRequiresHoneycombAndARealFreeSite() {
+        assertFalse(BeeHiveGrowthPolicy.canExpand(new BeeHiveGrowthPolicy.State(6,6,8,6,1,2,1,0,8)));
+        assertFalse(BeeHiveGrowthPolicy.canExpand(new BeeHiveGrowthPolicy.State(6,6,8,6,2,2,0,0,8)));
     }
-
-    @Test void expansionIsBoundedByFreeSpaceAndLimit() {
-        assertFalse(BeeHiveGrowthPolicy.canExpand(
-                new BeeHiveGrowthPolicy.State(3, 3, 70, 30, 12, 10, 0, 0, 6)));
-        assertFalse(BeeHiveGrowthPolicy.canExpand(
-                new BeeHiveGrowthPolicy.State(3, 3, 70, 30, 12, 10, 2, 6, 6)));
+    @Test void expansionStopsAtConfiguredConnectedHiveLimit() {
+        assertFalse(BeeHiveGrowthPolicy.canExpand(new BeeHiveGrowthPolicy.State(27,27,30,27,2,2,1,8,8)));
     }
-
-    @Test void vanillaHiveGrowthRequiresOccupiedHomeAndFullHoney() {
-        assertTrue(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 5, 5, true, true));
-        assertFalse(BeeHiveGrowthPolicy.canGrowVanilla(2, 3, 5, 5, true, true));
-        assertFalse(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 4, 5, true, true));
-        assertFalse(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 5, 5, false, true));
-        assertFalse(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 5, 5, true, false));
+    @Test void invalidGrowthInputsAreRejected() {
+        assertThrows(IllegalArgumentException.class,()->new BeeHiveGrowthPolicy.State(-1,6,8,6,2,2,1,0,8));
+        assertThrows(IllegalArgumentException.class,()->new BeeHiveGrowthPolicy.State(6,6,8,6,2,2,1,9,8));
     }
-
-    @Test void vanillaHiveGrowthDoesNotEnforceLifetimeStructureLimit() {
-        for (int oldExtensions : new int[]{0, 8, 1000, 100_000}) {
-            assertTrue(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 5, 5, true, true));
-        }
-    }
-
-    @Test void expansionSitesPreferFlowersAndLowerThreatAndCrowding() {
-        var rich = new BeeHiveGrowthPolicy.SiteSignals(8, 0, 0);
-        var poor = new BeeHiveGrowthPolicy.SiteSignals(0, 4, 3);
-        assertTrue(BeeHiveGrowthPolicy.expansionSiteScore(rich)
-                > BeeHiveGrowthPolicy.expansionSiteScore(poor));
-    }
-
-    @Test void siteSignalsRejectNegativeCounts() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new BeeHiveGrowthPolicy.SiteSignals(-1, 0, 0));
+    @Test void siteScoreRewardsFlowersAndPenalizesCrowdingAndThreats() {
+        double safe=BeeHiveGrowthPolicy.expansionSiteScore(new BeeHiveGrowthPolicy.SiteSignals(8,0,0));
+        double crowded=BeeHiveGrowthPolicy.expansionSiteScore(new BeeHiveGrowthPolicy.SiteSignals(8,4,3));
+        assertTrue(safe>crowded);
+        assertEquals(1.0,safe,1.0e-12);
     }
 }

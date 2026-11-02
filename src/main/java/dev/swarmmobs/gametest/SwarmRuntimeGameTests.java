@@ -53,6 +53,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.BeehiveBlock;
+import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
 import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -61,6 +63,7 @@ import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.monster.Spider;
 import net.minecraft.world.entity.animal.Pig;
+import net.minecraft.world.entity.animal.Bee;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import net.neoforged.neoforge.network.registration.NetworkRegistry;
 
@@ -6046,4 +6049,142 @@ public final class SwarmRuntimeGameTests {
         }
     }
 
+
+    @PrefixGameTestTemplate(false)
+    @GameTest(batch = "swarm_runtime_bee_hive_growth", templateNamespace = SwarmMobs.MOD_ID,
+            template = TEMPLATE, timeoutTicks = 80)
+    public static void beeHiveGrowthBuildsConnectedVanillaHousingAndPaysItsCosts(GameTestHelper helper) {
+        boolean oldEnabled = SwarmConfig.ENABLED.get();
+        boolean oldGrowth = SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.get();
+        int oldMax = SwarmConfig.BEE_HIVE_MAX_EXTENSIONS.get();
+        int oldWaxCost = SwarmConfig.BEE_HIVE_WAX_COST.get();
+        int oldReserve = SwarmConfig.BEE_HIVE_HONEY_RESERVE.get();
+        boolean oldMobGriefing = helper.getLevel().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
+        TestPlayerHandle playerHandle = createTickingTestPlayer(helper, GameType.SURVIVAL);
+        try {
+            SwarmConfig.ENABLED.set(true);
+            SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.set(true);
+            SwarmConfig.BEE_HIVE_MAX_EXTENSIONS.set(8);
+            SwarmConfig.BEE_HIVE_WAX_COST.set(2);
+            SwarmConfig.BEE_HIVE_HONEY_RESERVE.set(3);
+            helper.getLevel().getGameRules().getRule(GameRules.RULE_MOBGRIEFING)
+                    .set(true, helper.getLevel().getServer());
+
+            BlockPos localHome = new BlockPos(2, 1, 2);
+            BlockPos home = BlockPos.containing(helper.absoluteVec(new Vec3(2.5, 1.0, 2.5)));
+            helper.setBlock(localHome, Blocks.BEEHIVE.defaultBlockState()
+                    .setValue(BeehiveBlock.HONEY_LEVEL, 5));
+            if (!(helper.getLevel().getBlockEntity(home) instanceof BeehiveBlockEntity hive)) {
+                helper.fail("Vanilla beehive block entity was not created");
+                return;
+            }
+            for (int i = 0; i < BeehiveBlockEntity.MAX_OCCUPANTS; i++) {
+                Bee stored = helper.spawn(EntityType.BEE, new BlockPos(1 + i, 1, 1));
+                stored.setNoAi(true);
+                stored.setHivePos(home);
+                hive.addOccupant(stored);
+            }
+            if (hive.getOccupantCount() != BeehiveBlockEntity.MAX_OCCUPANTS) {
+                helper.fail("Could not prepare a truly full vanilla hive");
+                return;
+            }
+
+            Bee builder = helper.spawn(EntityType.BEE, new BlockPos(2, 1, 3));
+            builder.setNoAi(true);
+            builder.setHivePos(home);
+            builder.setSavedFlowerPos(null);
+            Vec3 playerPosition = helper.absoluteVec(new Vec3(4.0, 1.0, 2.0));
+            playerHandle.player().setPos(playerPosition.x, playerPosition.y, playerPosition.z);
+            ItemEntity wax = new ItemEntity(helper.getLevel(),
+                    home.getX() + 0.5, home.getY() + 2.5, home.getZ() + 0.5,
+                    new ItemStack(Items.HONEYCOMB, 2));
+            helper.getLevel().addFreshEntity(wax);
+
+            if (!BeeHiveEvents.tryExpandIfEligible(helper.getLevel(), builder)) {
+                helper.fail("Eligible full colony did not build a vanilla hive extension");
+                return;
+            }
+            BlockPos extension = builder.getHivePos();
+            if (extension == null || extension.equals(home)
+                    || !helper.getLevel().getBlockState(extension).is(Blocks.BEEHIVE)
+                    || !(helper.getLevel().getBlockEntity(extension) instanceof BeehiveBlockEntity)) {
+                helper.fail("Expansion did not create a connected native BeehiveBlockEntity");
+                return;
+            }
+            if (helper.getLevel().getBlockState(home).getValue(BeehiveBlock.HONEY_LEVEL) != 4) {
+                helper.fail("Expansion did not spend exactly one honey level while preserving reserve");
+                return;
+            }
+            if (wax.isAlive() && wax.getItem().getCount() != 0) {
+                helper.fail("Expansion did not consume the required vanilla honeycomb wax");
+                return;
+            }
+            var colony = BeeColonyRuntime.hives(helper.getLevel()).snapshot(
+                    helper.getLevel(), home, helper.getLevel().getGameTime(), 9);
+            if (!colony.complete() || colony.hives().size() != 2 || colony.capacity() != 6) {
+                helper.fail("Connected colony snapshot did not include both native hive blocks");
+                return;
+            }
+            helper.succeed();
+        } finally {
+            playerHandle.close();
+            SwarmConfig.ENABLED.set(oldEnabled);
+            SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.set(oldGrowth);
+            SwarmConfig.BEE_HIVE_MAX_EXTENSIONS.set(oldMax);
+            SwarmConfig.BEE_HIVE_WAX_COST.set(oldWaxCost);
+            SwarmConfig.BEE_HIVE_HONEY_RESERVE.set(oldReserve);
+            helper.getLevel().getGameRules().getRule(GameRules.RULE_MOBGRIEFING)
+                    .set(oldMobGriefing, helper.getLevel().getServer());
+        }
+    }
+
+    @PrefixGameTestTemplate(false)
+    @GameTest(batch = "swarm_runtime_bee_hive_growth", templateNamespace = SwarmMobs.MOD_ID,
+            template = TEMPLATE, timeoutTicks = 60)
+    public static void beeOverflowWorkerUsesConnectedHiveWithFreeNativeCapacity(GameTestHelper helper) {
+        boolean oldEnabled = SwarmConfig.ENABLED.get();
+        boolean oldGrowth = SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.get();
+        try {
+            SwarmConfig.ENABLED.set(true);
+            SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.set(true);
+            BlockPos firstLocal = new BlockPos(1, 1, 2);
+            BlockPos secondLocal = new BlockPos(2, 1, 2);
+            BlockPos first = BlockPos.containing(helper.absoluteVec(new Vec3(1.5, 1.0, 2.5)));
+            BlockPos second = BlockPos.containing(helper.absoluteVec(new Vec3(2.5, 1.0, 2.5)));
+            helper.setBlock(firstLocal, Blocks.BEEHIVE.defaultBlockState());
+            helper.setBlock(secondLocal, Blocks.BEE_NEST.defaultBlockState());
+            if (!(helper.getLevel().getBlockEntity(first) instanceof BeehiveBlockEntity fullHive)
+                    || !(helper.getLevel().getBlockEntity(second) instanceof BeehiveBlockEntity openHive)) {
+                helper.fail("Connected vanilla hive block entities were not created");
+                return;
+            }
+            for (int i = 0; i < BeehiveBlockEntity.MAX_OCCUPANTS; i++) {
+                Bee stored = helper.spawn(EntityType.BEE, new BlockPos(1 + i, 1, 1));
+                stored.setNoAi(true);
+                stored.setHivePos(first);
+                fullHive.addOccupant(stored);
+            }
+            if (fullHive.getOccupantCount() != BeehiveBlockEntity.MAX_OCCUPANTS
+                    || openHive.getOccupantCount() != 0) {
+                helper.fail("Overflow routing fixture has incorrect native occupancy");
+                return;
+            }
+            Bee overflow = helper.spawn(EntityType.BEE, new BlockPos(1, 1, 3));
+            overflow.setNoAi(true);
+            overflow.setHivePos(first);
+            if (!BeeHiveColonyRouter.routeOverflowBee(
+                    helper.getLevel(), overflow, helper.getLevel().getGameTime())) {
+                helper.fail("Unladen overflow Bee was not routed to the connected free hive");
+                return;
+            }
+            if (!second.equals(overflow.getHivePos())) {
+                helper.fail("Overflow Bee did not receive the underfilled native hive as home");
+                return;
+            }
+            helper.succeed();
+        } finally {
+            SwarmConfig.ENABLED.set(oldEnabled);
+            SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.set(oldGrowth);
+        }
+    }
 }

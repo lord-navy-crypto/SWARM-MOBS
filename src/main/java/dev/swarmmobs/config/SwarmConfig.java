@@ -101,6 +101,10 @@ public final class SwarmConfig {
     public static final ModConfigSpec.BooleanValue BEE_FLOWER_RECRUITMENT_ENABLED;
     public static final ModConfigSpec.BooleanValue BEE_CONNECTED_HIVE_GROWTH_ENABLED;
     public static final ModConfigSpec.BooleanValue BEE_COLONY_SHELTER_ENABLED;
+    public static final ModConfigSpec.IntValue BEE_HIVE_MAX_EXTENSIONS;
+    public static final ModConfigSpec.IntValue BEE_HIVE_WAX_COST;
+    public static final ModConfigSpec.IntValue BEE_HIVE_HONEY_RESERVE;
+    public static final ModConfigSpec.IntValue BEE_HIVE_GROWTH_COOLDOWN_TICKS;
     public static final ModConfigSpec.IntValue NEST_MAX_POPULATION;
     public static final ModConfigSpec.BooleanValue NEST_ADAPTIVE_RECRUITMENT;
     public static final ModConfigSpec.DoubleValue NEST_WORKER_TARGET_SHARE;
@@ -462,8 +466,24 @@ public final class SwarmConfig {
                 .define("nestConnectedCoreGrowthEnabled", false);
 
         BEE_CONNECTED_HIVE_GROWTH_ENABLED = BUILDER
-                .comment("EXPERIMENTAL: expand vanilla bee nests or beehives into adjacent air when full of bees and full of honey. Consumes the parent's honey level; OFF by default.")
+                .comment("EXPERIMENTAL: expand face-connected vanilla bee nests/beehives. Requires full connected housing, honey above a winter reserve and dropped vanilla honeycomb as wax. Native hive occupancy is never modified. OFF by default.")
                 .define("beeConnectedHiveGrowthEnabled", false);
+
+        BEE_HIVE_MAX_EXTENSIONS = BUILDER
+                .comment("Maximum additional vanilla hive blocks in one connected bee colony; scans fail closed above this bounded limit.")
+                .defineInRange("beeHiveMaxExtensions", 8, 1, 32);
+
+        BEE_HIVE_WAX_COST = BUILDER
+                .comment("Vanilla honeycomb item count consumed per successful hive extension. Honeycomb must be dropped within eight blocks of a member hive.")
+                .defineInRange("beeHiveWaxCost", 2, 1, 16);
+
+        BEE_HIVE_HONEY_RESERVE = BUILDER
+                .comment("Honey levels reserved per hive for colony survival. Expansion spends one level only from a hive above this reserve.")
+                .defineInRange("beeHiveHoneyReserve", 3, 0, 5);
+
+        BEE_HIVE_GROWTH_COOLDOWN_TICKS = BUILDER
+                .comment("Minimum ticks between successful physical hive extensions for one connected bee colony.")
+                .defineInRange("beeHiveGrowthCooldownTicks", 2400, 400, 24000);
 
         BEE_COLONY_SHELTER_ENABLED = BUILDER
                 .comment("EXPERIMENTAL: locally warn unladen vanilla Bees about visible hostile mobs near their own hive and let a deterministic subset return home. Does not assign attack targets; OFF by default.")

@@ -82,3 +82,41 @@ Therefore:
 - Unit tests: safe Spider wall-height and headroom gates; successful-return transition; no false trip when nectar is lost away from hive; natural and explicit rest recovery; task selection under fatigue; worker task reset after expansion.
 - CI: Java 21 compile, JUnit, Runtime GameTests, Gradle build, custom asset verification, and JAR packaging.
 - In-world tests: low wall, 2–5 block wall, wall with blocked headroom, wall taller than limit, target below Spider, Bee completes a flower-to-hive trip, flower confidence increments once, fatigue triggers REST, rest completes on re-emergence, hostile pressure triggers GUARD, and full hive expansion requires BUILD.
+
+
+## Connected vanilla hive growth and overflow routing
+
+The connected-hive runtime scans a bounded face-connected component of vanilla
+BEE_NEST/BEEHIVE block entities. Each block keeps its own native occupancy and
+honey; total capacity is the sum of the vanilla three-bee slots. An unloaded
+chunk boundary or a component beyond the configured scan cap makes the
+snapshot incomplete and prevents growth/routing from acting on a partial
+colony. The component is reconstructed from loaded vanilla blocks after
+reload; no custom hive block or custom occupancy NBT is introduced.
+
+Expansion requires:
+- every connected native occupancy slot to be filled;
+- total honey above the configured winter reserve (default 3 levels per hive);
+- vanilla HONEYCOMB item entities dropped within eight blocks of a member hive
+  (default cost 2; honeycomb is the construction-wax input);
+- a loaded, empty, fluid-free, entity-free horizontal face-neighbor site;
+- mobGriefing, a nearby non-spectator player, no active local hive alarm, and
+  a worker assigned BUILD;
+- fewer than eight connected extension blocks by default and a 2,400-tick
+  successful-growth cooldown.
+
+A successful extension places a real vanilla hive block, spends one honey
+level from a member hive that remains above its per-hive reserve, consumes the
+honeycomb cost, and assigns the builder to the new native hive. If either
+resource debit fails, the placed extension and honey change are rolled back.
+No player inventory or container is read or modified.
+
+Idle unladen overflow Bees are routed to connected hives with real free
+occupant slots. A short reservation prevents several returning Bees from
+claiming the same final slot; vanilla hive entry remains the authority that
+actually stores each Bee. Flower observations can be shared across the full
+connected component when its loaded boundary is complete.
+
+Third-party land-claim plugin integration is not claimed. Growth remains
+opt-in and requires mobGriefing; it never overwrites a non-air block or forces
+chunk loading.
