@@ -1,12 +1,11 @@
 package dev.swarmmobs.algorithm;
 
-import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SwarmRouteFailureMemoryTest {
-    private static final BlockPos A = new BlockPos(4, 64, 8);
-    private static final BlockPos B = new BlockPos(5, 64, 8);
+    private static final long A = 40064L;
+    private static final long B = 50064L;
 
     @Test void oneFailureDoesNotBlacklistANewlyObservedRoute() {
         var memory = new SwarmRouteFailureMemory();
@@ -52,7 +51,7 @@ class SwarmRouteFailureMemoryTest {
     @Test void memoryIsBounded() {
         var memory = new SwarmRouteFailureMemory();
         for (int i = 0; i < SwarmRouteFailureMemory.MAX_ENTRIES + 100; i++) {
-            memory.reportFailure(new BlockPos(i, 64, 0), i + 1L);
+            memory.reportFailure(i + 1L, i + 1L);
         }
         assertTrue(memory.size(100_000L) <= SwarmRouteFailureMemory.MAX_ENTRIES);
     }

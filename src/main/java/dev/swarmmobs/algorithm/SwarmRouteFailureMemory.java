@@ -1,6 +1,5 @@
 package dev.swarmmobs.algorithm;
 
-import net.minecraft.core.BlockPos;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -17,37 +16,36 @@ public final class SwarmRouteFailureMemory {
     private final LinkedHashMap<Long, Failure> failures =
             new LinkedHashMap<>(16, 0.75f, true);
 
-    public void reportFailure(BlockPos position, long now) {
-        if (position == null || now < 0) {
+    public void reportFailure(long positionKey, long now) {
+        if (now < 0) {
             throw new IllegalArgumentException("invalid route failure");
         }
         prune(now);
-        long key = position.asLong();
-        Failure previous = failures.get(key);
+        Failure previous = failures.get(positionKey);
         if (previous != null && now < previous.lastFailureTick()) return;
         if (previous != null && now == previous.lastFailureTick()) return;
         int count = previous != null
                 && now - previous.lastFailureTick() <= FAILURE_WINDOW_TICKS
                 ? Math.min(8, previous.count() + 1) : 1;
-        failures.put(key, new Failure(count, now));
+        failures.put(positionKey, new Failure(count, now));
         trim();
     }
 
-    public boolean shouldAvoid(BlockPos position, long now,
+    public boolean shouldAvoid(long positionKey, long now,
             int threshold, long memoryTicks) {
-        if (position == null || now < 0 || threshold < 1 || memoryTicks < 1) {
+        if (now < 0 || threshold < 1 || memoryTicks < 1) {
             return false;
         }
         prune(now);
-        Failure failure = failures.get(position.asLong());
+        Failure failure = failures.get(positionKey);
         if (failure == null || now < failure.lastFailureTick()) return false;
         return failure.count() >= threshold
                 && now - failure.lastFailureTick() < memoryTicks;
     }
 
     /** A successful local path query or accepted movement clears old failure evidence. */
-    public void reportSuccess(BlockPos position) {
-        if (position != null) failures.remove(position.asLong());
+    public void reportSuccess(long positionKey) {
+        failures.remove(positionKey);
     }
 
     public int size(long now) {
@@ -55,10 +53,10 @@ public final class SwarmRouteFailureMemory {
         return failures.size();
     }
 
-    public int failureCount(BlockPos position, long now) {
-        if (position == null || now < 0) return 0;
+    public int failureCount(long positionKey, long now) {
+        if (now < 0) return 0;
         prune(now);
-        Failure failure = failures.get(position.asLong());
+        Failure failure = failures.get(positionKey);
         return failure == null ? 0 : failure.count();
     }
 

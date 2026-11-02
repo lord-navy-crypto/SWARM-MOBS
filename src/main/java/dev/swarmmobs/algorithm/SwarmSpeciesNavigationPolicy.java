@@ -1,8 +1,6 @@
 package dev.swarmmobs.algorithm;
 
 import dev.swarmmobs.agent.SwarmAgentArchetype;
-import dev.swarmmobs.agent.SwarmAgentProfiles;
-import net.minecraft.world.entity.PathfinderMob;
 
 /**
  * Species-specific locomotion tuning only. This policy changes no attacks,
@@ -24,12 +22,6 @@ public final class SwarmSpeciesNavigationPolicy {
                 throw new IllegalArgumentException("invalid species navigation profile");
             }
         }
-    }
-
-    public static Profile profile(PathfinderMob mob) {
-        return mob == null
-                ? profile(SwarmAgentArchetype.ASSAULT)
-                : profile(SwarmAgentProfiles.profile(mob).archetype());
     }
 
     public static Profile profile(SwarmAgentArchetype archetype) {

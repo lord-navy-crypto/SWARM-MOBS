@@ -10,16 +10,16 @@ public final class SwarmRouteFailureRegistry {
     private static final Map<ServerLevel, SwarmRouteFailureMemory> MEMORY = new WeakHashMap<>();
 
     public static void reportFailure(ServerLevel level, BlockPos position, long now) {
-        memory(level).reportFailure(position, now);
+        memory(level).reportFailure(position.asLong(), now);
     }
 
     public static void reportSuccess(ServerLevel level, BlockPos position) {
-        memory(level).reportSuccess(position);
+        memory(level).reportSuccess(position.asLong());
     }
 
     public static boolean shouldAvoid(ServerLevel level, BlockPos position, long now,
             int threshold, long memoryTicks) {
-        return memory(level).shouldAvoid(position, now, threshold, memoryTicks);
+        return memory(level).shouldAvoid(position.asLong(), now, threshold, memoryTicks);
     }
 
     public static int size(ServerLevel level, long now) {

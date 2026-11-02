@@ -621,7 +621,7 @@ public final class SwarmApproachGoal extends Goal {
         }
 
         double lookahead = SwarmConfig.NAV_OBSTACLE_LOOKAHEAD.get();
-        var speciesProfile = SwarmSpeciesNavigationPolicy.profile(mob);
+        var speciesProfile = SwarmSpeciesNavigationPolicy.profile(SwarmAgentProfiles.profile(mob).archetype());
         double lateralDistance = SwarmConfig.NAV_OBSTACLE_LATERAL_DISTANCE.get()
                 * speciesProfile.obstacleLateralScale();
         long gameTick = level.getGameTime();
@@ -826,7 +826,7 @@ public final class SwarmApproachGoal extends Goal {
             Vec2 self,
             Vec2 destination
     ) {
-        var speciesProfile = SwarmSpeciesNavigationPolicy.profile(mob);
+        var speciesProfile = SwarmSpeciesNavigationPolicy.profile(SwarmAgentProfiles.profile(mob).archetype());
         List<SwarmRecoveryCandidatePolicy.RecoveryCandidate> generated =
                 SwarmRecoveryCandidatePolicy.generate(
                         self,
