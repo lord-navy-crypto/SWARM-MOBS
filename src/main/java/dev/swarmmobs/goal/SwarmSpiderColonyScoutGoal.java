@@ -187,7 +187,8 @@ public final class SwarmSpiderColonyScoutGoal extends Goal {
 
     private boolean idle(ServerLevel level) {
         if (!ColonyPopulationRegistry.canPerformCivilianWork(level, spider)) return false;
-        if (!SwarmConfig.ENABLED.get() || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()
+        if (!SwarmConfig.ENABLED.get() || !SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.get()
+                || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()
                 || !SwarmConfig.NEST_HAULING_ENABLED.get()
                 || !level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)
                 || !spider.isAlive() || spider.isNoAi() || spider.getTarget() != null) {
