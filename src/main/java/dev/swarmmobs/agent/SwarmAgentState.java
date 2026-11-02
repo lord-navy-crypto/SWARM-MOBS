@@ -130,6 +130,9 @@ public final class SwarmAgentState {
     private long sensingAcceptedObservations;
     private long sensingDroppedObservations;
     private double lastSensingNoiseMagnitude;
+    private long collectiveObservationFusionCount;
+    private int lastFusionContributorCount = 1;
+    private double lastFusionDisagreement;
     private boolean searchEpisodeActive;
     private UUID searchEpisodeTargetId;
     private long searchEpisodeStartTick = Long.MIN_VALUE;
@@ -941,6 +944,25 @@ public final class SwarmAgentState {
 
     public double lastSensingNoiseMagnitude() {
         return lastSensingNoiseMagnitude;
+    }
+
+    public long collectiveObservationFusionCount() {
+        return collectiveObservationFusionCount;
+    }
+
+    public int lastFusionContributorCount() {
+        return lastFusionContributorCount;
+    }
+
+    public double lastFusionDisagreement() {
+        return lastFusionDisagreement;
+    }
+
+    public void recordCollectiveObservationFusion(int contributors, double disagreement) {
+        lastFusionContributorCount = Math.max(1, Math.min(64, contributors));
+        lastFusionDisagreement = Double.isFinite(disagreement)
+                ? Math.max(0.0, disagreement) : 0.0;
+        if (lastFusionContributorCount > 1) collectiveObservationFusionCount++;
     }
 
     public BlockState carriedEngineeringBlock() {

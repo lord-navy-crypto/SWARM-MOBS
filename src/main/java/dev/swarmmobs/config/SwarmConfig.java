@@ -135,6 +135,8 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue COMMUNICATION_LATENCY_TICKS;
     public static final ModConfigSpec.DoubleValue COMMUNICATION_PACKET_DROP_RATE;
     public static final ModConfigSpec.IntValue COMMUNICATION_EXPERIMENT_SEED;
+    public static final ModConfigSpec.BooleanValue COLLECTIVE_OBSERVATION_FUSION_ENABLED;
+    public static final ModConfigSpec.IntValue COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS;
 
     public static final ModConfigSpec.BooleanValue EXTERNAL_AI_ENABLED;
     public static final ModConfigSpec.BooleanValue EXTERNAL_AI_ACTIVE_ENABLED;
@@ -621,6 +623,14 @@ public final class SwarmConfig {
         COMMUNICATION_EXPERIMENT_SEED = BUILDER
                 .comment("Seed mixed into deterministic packet-drop decisions for reproducible experiments.")
                 .defineInRange("experimentSeed", 0, Integer.MIN_VALUE, Integer.MAX_VALUE);
+
+        COLLECTIVE_OBSERVATION_FUSION_ENABLED = BUILDER
+                .comment("Fuse fresh, spatially consistent observations from nearby swarm agents into one bounded shared estimate. Fusion never refreshes the source timestamp or reads hidden live target state.")
+                .define("observationFusionEnabled", true);
+
+        COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS = BUILDER
+                .comment("Maximum source-observation age difference, in ticks, for collective target fusion.")
+                .defineInRange("observationFusionWindowTicks", 4, 0, 20);
 
         BUILDER.pop();
 

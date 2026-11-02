@@ -1342,6 +1342,15 @@ public final class SwarmMobEvents {
                         velocity.z
                 );
                 state.recordSensingAccepted(sensingSample.horizontalNoiseMagnitude());
+                List<TargetObservation> fusionRecords = new ArrayList<>(records);
+                if (state.targetObservation() != null) {
+                    fusionRecords.add(state.targetObservation());
+                }
+                fusionRecords.add(observation);
+                var fusion = fuseObservations(gameTick, memoryTicks, fusionRecords, observation);
+                observation = fusion.observation();
+                state.recordCollectiveObservationFusion(
+                        fusion.contributors(), fusion.maximumHorizontalDisagreement());
                 state.rememberTarget(observation, true);
                 return new TargetSelection(observation, direct, true);
             }
@@ -1382,16 +1391,47 @@ public final class SwarmMobEvents {
             records.add(state.targetObservation());
         }
 
-        var selected = TargetRelayPolicy.selectFreshest(gameTick, memoryTicks, records);
-        if (selected.isPresent()) {
-            TargetObservation observation = selected.get();
+        var fusion = fuseObservations(gameTick, memoryTicks, records, null);
+        if (fusion != null) {
+            TargetObservation observation = fusion.observation();
             Player shared = resolvePlayer(level, observation.targetId());
             if (shared != null && observation.hasFinitePosition()) {
+                state.recordCollectiveObservationFusion(
+                        fusion.contributors(), fusion.maximumHorizontalDisagreement());
                 state.rememberTarget(observation, false);
                 return new TargetSelection(observation, shared, false);
             }
         }
 
+        return null;
+    }
+
+    private static TargetRelayPolicy.FusionResult fuseObservations(
+            long gameTick,
+            int memoryTicks,
+            List<TargetObservation> records,
+            TargetObservation fallback
+    ) {
+        if (SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.get()) {
+            var fused = TargetRelayPolicy.fuseFreshest(
+                    gameTick,
+                    memoryTicks,
+                    records,
+                    SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS.get(),
+                    8.0
+            );
+            if (fused.isPresent()) return fused.get();
+        }
+
+        if (fallback != null) {
+            return new TargetRelayPolicy.FusionResult(fallback, 1, 0.0);
+        }
+        if (!SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.get()) {
+            var selected = TargetRelayPolicy.selectFreshest(gameTick, memoryTicks, records);
+            if (selected.isPresent() && selected.get().hasFinitePosition()) {
+                return new TargetRelayPolicy.FusionResult(selected.get(), 1, 0.0);
+            }
+        }
         return null;
     }
 
