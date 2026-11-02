@@ -5328,70 +5328,78 @@ public final class SwarmRuntimeGameTests {
     }
 
     @PrefixGameTestTemplate(false)
-    @GameTest(batch = "swarm_runtime_colony_scent_navigation",
+    @GameTest(batch = "swarm_runtime_resource_scent_archived",
             templateNamespace = SwarmMobs.MOD_ID, template = TEMPLATE, timeoutTicks = 100)
-    public static void idleZombieFollowsLocalScentButNotAbsentSignals(
+    public static void idleZombieDoesNotFollowArchivedResourceScent(
             GameTestHelper helper) {
-        BlockPos core=new BlockPos(0,1,2);
-        BlockPos position=new BlockPos(0,1,0);
-        BlockPos destination=new BlockPos(4,1,0);
-        helper.setBlock(core,SwarmNestBlocks.NEST_CORE.get());
-        helper.setBlock(destination.below(),Blocks.STONE);
-        var be=helper.getLevel().getBlockEntity(helper.absolutePos(core));
+        BlockPos core = new BlockPos(0, 1, 2);
+        BlockPos destination = new BlockPos(4, 1, 0);
+        helper.setBlock(core, SwarmNestBlocks.NEST_CORE.get());
+        helper.setBlock(destination.below(), Blocks.STONE);
+        var be = helper.getLevel().getBlockEntity(helper.absolutePos(core));
         if (!(be instanceof SwarmNestBlockEntity nest)) {
-            helper.fail("No core for gradient test");return;
+            helper.fail("No core for archived resource-scent test");
+            return;
         }
-        Zombie worker=helper.spawn(EntityType.ZOMBIE,position);
+        Zombie worker = helper.spawn(EntityType.ZOMBIE, new BlockPos(0, 1, 0));
         worker.setNoGravity(true);
-        worker.getPersistentData().putLong("SwarmColonyNest",helper.absolutePos(core).asLong());
-        boolean master=SwarmConfig.ENABLED.get();
-        boolean lifecycle=SwarmConfig.NEST_LIFECYCLE_ENABLED.get();
-        boolean hauling=SwarmConfig.NEST_HAULING_ENABLED.get();
-        boolean pheromones=SwarmConfig.NEST_PHEROMONES_ENABLED.get();
-        boolean exploration=SwarmConfig.NEST_PHEROMONE_EXPLORATION_ENABLED.get();
-        boolean grief=helper.getLevel().getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING);
+        worker.getPersistentData().putLong("SwarmColonyNest",
+                helper.absolutePos(core).asLong());
+
+        boolean oldMaster = SwarmConfig.ENABLED.get();
+        boolean oldLifecycle = SwarmConfig.NEST_LIFECYCLE_ENABLED.get();
+        boolean oldHauling = SwarmConfig.NEST_HAULING_ENABLED.get();
+        boolean oldPheromones = SwarmConfig.NEST_PHEROMONES_ENABLED.get();
+        boolean oldExploration = SwarmConfig.NEST_PHEROMONE_EXPLORATION_ENABLED.get();
+        boolean oldEngineering = SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.get();
+        boolean oldGrief = helper.getLevel().getGameRules()
+                .getBoolean(GameRules.RULE_MOBGRIEFING);
         try {
             SwarmConfig.ENABLED.set(true);
             SwarmConfig.NEST_LIFECYCLE_ENABLED.set(true);
             SwarmConfig.NEST_HAULING_ENABLED.set(true);
             SwarmConfig.NEST_PHEROMONES_ENABLED.set(true);
             SwarmConfig.NEST_PHEROMONE_EXPLORATION_ENABLED.set(true);
+            SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.set(false);
             helper.getLevel().getGameRules().getRule(GameRules.RULE_MOBGRIEFING)
-                    .set(true,helper.getLevel().getServer());
-            var signal=new SwarmNestPheromoneField.Position(
+                    .set(true, helper.getLevel().getServer());
+
+            var signal = new SwarmNestPheromoneField.Position(
                     helper.absolutePos(destination).getX(),
                     helper.absolutePos(destination).getY(),
                     helper.absolutePos(destination).getZ());
-            var scentCore=helper.absolutePos(core);
-            var homePos=new SwarmNestPheromoneField.Position(
-                    scentCore.getX(),scentCore.getY(),scentCore.getZ());
-            if (!nest.pheromones().observe(homePos,signal,
-                    SwarmNestColonyPolicy.Kind.TIMBER,helper.getLevel().getGameTime())) {
-                helper.fail("Failed to emit a loaded local wood source cue");
+            var home = helper.absolutePos(core);
+            var homePosition = new SwarmNestPheromoneField.Position(
+                    home.getX(), home.getY(), home.getZ());
+            if (!nest.pheromones().observe(homePosition, signal,
+                    SwarmNestColonyPolicy.Kind.TIMBER,
+                    helper.getLevel().getGameTime())) {
+                helper.fail("Failed to seed a local resource-only pheromone cue");
                 return;
             }
-            boolean installed=worker.goalSelector.getAvailableGoals().stream()
-                    .anyMatch(w->w.getGoal() instanceof SwarmZombiePheromoneExploreGoal);
-            var goal=new SwarmZombiePheromoneExploreGoal(worker);
-            if (!installed || !goal.canUse()) {
-                helper.fail("Worker did not choose a nearby gradient when food/wood absent");
+
+            boolean installed = worker.goalSelector.getAvailableGoals().stream()
+                    .anyMatch(w -> w.getGoal() instanceof SwarmZombiePheromoneExploreGoal);
+            boolean canUse = new SwarmZombiePheromoneExploreGoal(worker).canUse();
+            if (installed || canUse) {
+                helper.fail("Archived resource pheromone still drives Zombie exploration");
                 return;
             }
-            goal.start();
-            goal.stop();
-            if (nest.resources()!=0 || nest.pheromones().size(helper.getLevel().getGameTime())==0) {
-                helper.fail("Gradient walking invented resources or destroyed signal");
+            if (nest.resources() != 0
+                    || nest.pheromones().size(helper.getLevel().getGameTime()) == 0) {
+                helper.fail("Resource signal was unexpectedly consumed or converted to inventory");
                 return;
             }
             helper.succeed();
         } finally {
-            SwarmConfig.ENABLED.set(master);
-            SwarmConfig.NEST_LIFECYCLE_ENABLED.set(lifecycle);
-            SwarmConfig.NEST_HAULING_ENABLED.set(hauling);
-            SwarmConfig.NEST_PHEROMONES_ENABLED.set(pheromones);
-            SwarmConfig.NEST_PHEROMONE_EXPLORATION_ENABLED.set(exploration);
+            SwarmConfig.ENABLED.set(oldMaster);
+            SwarmConfig.NEST_LIFECYCLE_ENABLED.set(oldLifecycle);
+            SwarmConfig.NEST_HAULING_ENABLED.set(oldHauling);
+            SwarmConfig.NEST_PHEROMONES_ENABLED.set(oldPheromones);
+            SwarmConfig.NEST_PHEROMONE_EXPLORATION_ENABLED.set(oldExploration);
+            SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.set(oldEngineering);
             helper.getLevel().getGameRules().getRule(GameRules.RULE_MOBGRIEFING)
-                    .set(grief,helper.getLevel().getServer());
+                    .set(oldGrief, helper.getLevel().getServer());
         }
     }
 

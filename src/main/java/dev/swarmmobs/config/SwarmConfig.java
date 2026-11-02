@@ -11,6 +11,11 @@ public final class SwarmConfig {
         return !Boolean.getBoolean("swarmmobs.gametest");
     }
 
+    // Keep the archived Zombie colony system testable in GameTests, but OFF in normal worlds.
+    private static boolean defaultZombieColonyEngineeringEnabled() {
+        return Boolean.getBoolean("swarmmobs.gametest");
+    }
+
 
     public static final ModConfigSpec.BooleanValue ENABLED;
     public static final ModConfigSpec.IntValue PLAN_INTERVAL_TICKS;
@@ -35,6 +40,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue SEARCH_PHASE_TICKS;
     public static final ModConfigSpec.DoubleValue SEARCH_ARRIVAL_TOLERANCE;
     public static final ModConfigSpec.DoubleValue SEARCH_SPEED_FACTOR;
+    public static final ModConfigSpec.BooleanValue SEARCH_TRAIL_COVERAGE_ENABLED;
     public static final ModConfigSpec.BooleanValue TARGET_PREDICTION_ENABLED;
     public static final ModConfigSpec.IntValue TARGET_PREDICTION_LEAD_TICKS;
     public static final ModConfigSpec.IntValue TARGET_PREDICTION_MAX_TICKS;
@@ -72,6 +78,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue ZOMBIE_ENGINEERING_MAX_BRIDGE_SPAN;
 
     // New idle colony construction is opt-in to protect existing player worlds.
+    public static final ModConfigSpec.BooleanValue ZOMBIE_COLONY_ENGINEERING_ENABLED;
     public static final ModConfigSpec.BooleanValue NEST_CONSTRUCTION_ENABLED;
     public static final ModConfigSpec.BooleanValue NEST_LIFECYCLE_ENABLED;
     public static final ModConfigSpec.BooleanValue NEST_HAULING_ENABLED;
@@ -88,6 +95,10 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue NEST_HAUL_MAX_STACK;
     public static final ModConfigSpec.IntValue NEST_HAUL_ATTEMPT_INTERVAL;
     public static final ModConfigSpec.BooleanValue NEST_VISIBLE_EXPANSION_ENABLED;
+    public static final ModConfigSpec.BooleanValue NEST_CONNECTED_CORE_GROWTH_ENABLED;
+    public static final ModConfigSpec.BooleanValue NEST_COLONY_RALLY_ENABLED;
+    public static final ModConfigSpec.BooleanValue BEE_FLOWER_RECRUITMENT_ENABLED;
+    public static final ModConfigSpec.BooleanValue BEE_CONNECTED_HIVE_GROWTH_ENABLED;
     public static final ModConfigSpec.IntValue NEST_MAX_POPULATION;
     public static final ModConfigSpec.BooleanValue NEST_ADAPTIVE_RECRUITMENT;
     public static final ModConfigSpec.DoubleValue NEST_WORKER_TARGET_SHARE;
@@ -216,6 +227,10 @@ public final class SwarmConfig {
         SEARCH_SPEED_FACTOR = BUILDER
                 .comment("Movement-speed factor used during SEARCH so expanding coverage does not slow with stale target confidence.")
                 .defineInRange("searchSpeedFactor", 1.0, 0.25, 1.5);
+
+        SEARCH_TRAIL_COVERAGE_ENABLED = BUILDER
+                .comment("Enable bounded, target-specific memory of actually visited SEARCH waypoints. This is tactical search coverage, not nest resource pheromone or resource gathering.")
+                .define("searchTrailCoverageEnabled", true);
 
         TARGET_PREDICTION_ENABLED = BUILDER
                 .comment("Enable conservative short-horizon prediction from observed target velocity.")
@@ -360,6 +375,10 @@ public final class SwarmConfig {
         // opt into all colony experiments in existing worlds via testmode on.
         BUILDER.push("colonies");
 
+        ZOMBIE_COLONY_ENGINEERING_ENABLED = BUILDER
+                .comment("Master switch for the ant/termite-inspired Zombie colony engineering layer: obstacle breaking/bridging, nest founding/lifecycle/expansion, and material harvesting/hauling. OFF by default in normal worlds. Bee hive growth and flower recruitment use independent switches.")
+                .define("zombieColonyEngineeringEnabled", defaultZombieColonyEngineeringEnabled());
+
         NEST_CONSTRUCTION_ENABLED = BUILDER
                 .comment("EXPERIMENTAL: allow idle Zombie workers to place a persistent Nest Core on suitable natural soil; OFF by default to protect player worlds.")
                 .define("nestConstructionEnabled", defaultColonyExperimentsEnabled());
@@ -431,6 +450,22 @@ public final class SwarmConfig {
         NEST_VISIBLE_EXPANSION_ENABLED = BUILDER
                 .comment("EXPERIMENTAL: physically place conservative soil/timber nest shell blocks when chambers expand. OFF by default. Requires mobGriefing; blocked sites defer upgrades.")
                 .define("nestVisibleExpansionEnabled", defaultColonyExperimentsEnabled());
+
+        NEST_CONNECTED_CORE_GROWTH_ENABLED = BUILDER
+                .comment("EXPERIMENTAL: allow one active Nest Core to spend stored resources on new adjacent passive Nest Core blocks. OFF by default until GameTests validate shared accounting.")
+                .define("nestConnectedCoreGrowthEnabled", false);
+
+        BEE_CONNECTED_HIVE_GROWTH_ENABLED = BUILDER
+                .comment("EXPERIMENTAL: expand vanilla bee nests or beehives into adjacent air when full of bees and full of honey. Consumes the parent's honey level; OFF by default.")
+                .define("beeConnectedHiveGrowthEnabled", false);
+
+        NEST_COLONY_RALLY_ENABLED = BUILDER
+                .comment("EXPERIMENTAL: allow a limited set of nearby idle colony monsters to converge on a recent real encounter witness position; no remote target acquisition. OFF by default.")
+                .define("nestColonyRallyEnabled", false);
+
+        BEE_FLOWER_RECRUITMENT_ENABLED = BUILDER
+                .comment("EXPERIMENTAL: share actual observed flowers between nearby vanilla bees without replacing vanilla pollination AI. OFF by default.")
+                .define("beeFlowerRecruitmentEnabled", false);
 
         NEST_MAX_POPULATION = BUILDER
                 .comment("Maximum locally counted colony members before reproduction stops.")

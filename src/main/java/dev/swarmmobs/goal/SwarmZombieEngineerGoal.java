@@ -146,6 +146,7 @@ public final class SwarmZombieEngineerGoal extends Goal {
                 || action == Action.NONE
                 || actionPos == null
                 || !SwarmConfig.ENABLED.get()
+                || !SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.get()
                 || !SwarmConfig.ZOMBIE_ENGINEERING_ENABLED.get()
                 || !zombie.isAlive()
                 || zombie.level().getDifficulty() != Difficulty.HARD
@@ -234,6 +235,7 @@ public final class SwarmZombieEngineerGoal extends Goal {
 
     private boolean baseEligible() {
         return SwarmConfig.ENABLED.get()
+                && SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.get()
                 && SwarmConfig.ZOMBIE_ENGINEERING_ENABLED.get()
                 && !zombie.level().isClientSide()
                 && zombie.level().getDifficulty() == Difficulty.HARD
