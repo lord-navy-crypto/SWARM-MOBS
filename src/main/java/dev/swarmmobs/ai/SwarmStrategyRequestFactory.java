@@ -36,6 +36,7 @@ public final class SwarmStrategyRequestFactory {
                 playerStyle.projectileShare(),
                 playerStyle.explosiveShare(),
                 playerStyle.fireShare(),
+                playerStyle.magicShare(),
                 playerStyle.otherShare()
         );
     }

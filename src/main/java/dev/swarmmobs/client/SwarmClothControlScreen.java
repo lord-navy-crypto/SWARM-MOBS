@@ -278,6 +278,7 @@ public final class SwarmClothControlScreen {
                         + "  |  projectile " + decimal(values, "learningProjectileShare")
                         + "  |  explosive " + decimal(values, "learningExplosiveShare")
                         + "  |  fire " + decimal(values, "learningFireShare")
+                        + "  |  magic " + decimal(values, "learningMagicShare")
                         + "  |  other " + decimal(values, "learningOtherShare"));
         status(category, entries,
                 "The deterministic response changes only bounded formation radius, spacing and cohesion. Vanilla attacks, damage and combat handoffs remain unchanged. Optional Ollama shadow requests receive aggregate shares only.");

@@ -36,6 +36,9 @@ public final class SwarmPlayerStylePolicy {
             case FIRE -> new Decision(
                     SwarmPlayerStyleRegistry.AttackStyle.FIRE,
                     1.10, 1.08, 0.96);
+            case MAGIC -> new Decision(
+                    SwarmPlayerStyleRegistry.AttackStyle.MAGIC,
+                    1.10, 1.08, 0.96);
             case OTHER -> new Decision(
                     SwarmPlayerStyleRegistry.AttackStyle.OTHER,
                     1.10, 1.08, 0.96);

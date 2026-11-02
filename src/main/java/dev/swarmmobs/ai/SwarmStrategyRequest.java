@@ -26,5 +26,6 @@ public record SwarmStrategyRequest(
         double playerProjectileShare,
         double playerExplosiveShare,
         double playerFireShare,
+        double playerMagicShare,
         double playerOtherShare
 ) {}

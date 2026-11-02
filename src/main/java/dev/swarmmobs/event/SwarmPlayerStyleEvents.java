@@ -8,6 +8,7 @@ import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.player.Player;
+import net.neoforged.neoforge.common.Tags;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 
 public final class SwarmPlayerStyleEvents {
@@ -32,6 +33,9 @@ public final class SwarmPlayerStyleEvents {
         }
         if (source.is(DamageTypeTags.IS_FIRE)) {
             return SwarmPlayerStyleRegistry.AttackStyle.FIRE;
+        }
+        if (source.is(Tags.DamageTypes.IS_MAGIC)) {
+            return SwarmPlayerStyleRegistry.AttackStyle.MAGIC;
         }
         if (source.is(DamageTypeTags.IS_PROJECTILE)) {
             return SwarmPlayerStyleRegistry.AttackStyle.PROJECTILE;

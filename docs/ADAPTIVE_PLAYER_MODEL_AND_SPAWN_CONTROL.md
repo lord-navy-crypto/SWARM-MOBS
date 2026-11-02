@@ -26,16 +26,17 @@ A multiplier is not an absolute mobs-per-minute guarantee. Actual spawn counts s
 
 Learning is opt-in and OFF by default.
 
-The first model observes only successful damage events where a player damages one of the four supported swarm species. It increments one of five broad categories:
+The first model observes only successful damage events where a player damages one of the four supported swarm species. It increments one of six broad categories:
 - melee
 - projectile
 - explosion
 - fire
+- magic
 - other
 
-The registry stores decaying category counts, not event replays. It is session-local, capped at 64 player profiles, expires inactive profiles after 12,000 ticks, and uses a 2,400-tick half-life. No player name, coordinates, chat, inventory contents, item identifiers or raw event history are stored. Disabling learning clears the current world's profiles; the Command Center also has an explicit reset action.
+The registry stores decaying category counts, not event replays. It is session-local, capped at 64 player profiles, expires inactive profiles after 12,000 ticks, and uses a 2,400-tick half-life. No player name, coordinates, chat, inventory contents, item identifiers or raw event history are stored. Disabling learning clears all session-local profiles across loaded dimensions; the Command Center also has an explicit reset action.
 
-The deterministic policy requires at least five decayed samples and a dominant category share of at least 55% before adapting. It can adjust only bounded formation radius, separation and cohesion multipliers. It cannot set targets, choose exact coordinates, issue per-mob commands, change damage, or override vanilla combat handoffs.
+The deterministic policy requires at least five decayed samples, a dominant category share of at least 55%, and a lead of at least 15 percentage points over the second-largest category before adapting. It can adjust only bounded formation radius, separation and cohesion multipliers. It cannot set targets, choose exact coordinates, issue per-mob commands, change damage, or override vanilla combat handoffs.
 
 When local Ollama shadow analysis is explicitly enabled, the request includes only aggregate profile counts and category shares. Ollama remains loopback-only in the existing architecture; the learned profile itself is never sent to a remote service.
 

@@ -19,6 +19,7 @@ public final class SwarmPlayerStyleRegistry {
         PROJECTILE,
         EXPLOSIVE,
         FIRE,
+        MAGIC,
         OTHER,
         MIXED,
         UNKNOWN
@@ -29,6 +30,7 @@ public final class SwarmPlayerStyleRegistry {
             double projectile,
             double explosive,
             double fire,
+            double magic,
             double other,
             double sampleMass,
             long lastObservedTick
@@ -36,23 +38,34 @@ public final class SwarmPlayerStyleRegistry {
         public double total() {
             return Math.max(0.0, melee) + Math.max(0.0, projectile)
                     + Math.max(0.0, explosive) + Math.max(0.0, fire)
-                    + Math.max(0.0, other);
+                    + Math.max(0.0, magic) + Math.max(0.0, other);
         }
 
         public AttackStyle dominantStyle() {
             if (sampleMass < MIN_CONFIDENT_SAMPLES || total() <= 0.0) {
                 return AttackStyle.UNKNOWN;
             }
-            double[] values = {melee, projectile, explosive, fire, other};
+            double[] values = {melee, projectile, explosive, fire, magic, other};
             AttackStyle[] styles = {
                     AttackStyle.MELEE, AttackStyle.PROJECTILE,
-                    AttackStyle.EXPLOSIVE, AttackStyle.FIRE, AttackStyle.OTHER
+                    AttackStyle.EXPLOSIVE, AttackStyle.FIRE,
+                    AttackStyle.MAGIC, AttackStyle.OTHER
             };
             int best = 0;
+            double secondBest = 0.0;
             for (int i = 1; i < values.length; i++) {
-                if (values[i] > values[best]) best = i;
+                if (values[i] > values[best]) {
+                    secondBest = values[best];
+                    best = i;
+                } else if (values[i] > secondBest) {
+                    secondBest = values[i];
+                }
             }
-            return values[best] / total() >= DOMINANT_SHARE
+            double total = total();
+            double dominantShare = values[best] / total;
+            double dominanceMargin = (values[best] - secondBest) / total;
+            return dominantShare >= DOMINANT_SHARE
+                    && dominanceMargin >= MIN_DOMINANCE_MARGIN
                     ? styles[best] : AttackStyle.MIXED;
         }
     }
@@ -64,6 +77,7 @@ public final class SwarmPlayerStyleRegistry {
             double projectileShare,
             double explosiveShare,
             double fireShare,
+            double magicShare,
             double otherShare,
             AttackStyle dominantStyle
     ) {}
@@ -73,11 +87,12 @@ public final class SwarmPlayerStyleRegistry {
     private static final long PROFILE_TTL_TICKS = 12000L;
     private static final double MIN_CONFIDENT_SAMPLES = 5.0;
     private static final double DOMINANT_SHARE = 0.55;
+    private static final double MIN_DOMINANCE_MARGIN = 0.15;
     private static final Map<ServerLevel, LinkedHashMap<UUID, MutableProfile>> LEVELS =
             new WeakHashMap<>();
 
     private static final class MutableProfile {
-        private final double[] counts = new double[5];
+        private final double[] counts = new double[6];
         private double sampleMass;
         private long lastDecayTick;
         private long lastObservedTick;
@@ -106,7 +121,7 @@ public final class SwarmPlayerStyleRegistry {
         private ProfileSnapshot snapshot(long now) {
             decay(now);
             return new ProfileSnapshot(counts[0], counts[1], counts[2],
-                    counts[3], counts[4], sampleMass, lastObservedTick);
+                    counts[3], counts[4], counts[5], sampleMass, lastObservedTick);
         }
     }
 
@@ -148,7 +163,7 @@ public final class SwarmPlayerStyleRegistry {
         if (profiles == null || profiles.isEmpty()) return emptySummary();
         expire(profiles, now);
 
-        double[] totals = new double[5];
+        double[] totals = new double[6];
         double sampleMass = 0.0;
         for (MutableProfile profile : profiles.values()) {
             ProfileSnapshot snapshot = profile.snapshot(now);
@@ -156,19 +171,20 @@ public final class SwarmPlayerStyleRegistry {
             totals[1] += snapshot.projectile();
             totals[2] += snapshot.explosive();
             totals[3] += snapshot.fire();
-            totals[4] += snapshot.other();
+            totals[4] += snapshot.magic();
+            totals[5] += snapshot.other();
             sampleMass += snapshot.sampleMass();
         }
         double total = 0.0;
         for (double value : totals) total += value;
         if (total <= 0.0) return emptySummary();
         ProfileSnapshot aggregate = new ProfileSnapshot(
-                totals[0], totals[1], totals[2], totals[3], totals[4],
+                totals[0], totals[1], totals[2], totals[3], totals[4], totals[5],
                 sampleMass, now);
         return new Summary(
                 profiles.size(), (int) Math.round(sampleMass),
                 totals[0] / total, totals[1] / total, totals[2] / total,
-                totals[3] / total, totals[4] / total,
+                totals[3] / total, totals[4] / total, totals[5] / total,
                 aggregate.dominantStyle());
     }
 
@@ -191,13 +207,14 @@ public final class SwarmPlayerStyleRegistry {
             case PROJECTILE -> 1;
             case EXPLOSIVE -> 2;
             case FIRE -> 3;
-            case OTHER -> 4;
+            case MAGIC -> 4;
+            case OTHER -> 5;
             case MIXED, UNKNOWN -> throw new IllegalArgumentException("Non-observation style");
         };
     }
 
     private static Summary emptySummary() {
-        return new Summary(0, 0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        return new Summary(0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 AttackStyle.UNKNOWN);
     }
 
