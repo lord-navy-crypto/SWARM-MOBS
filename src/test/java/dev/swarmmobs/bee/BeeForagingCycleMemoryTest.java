@@ -18,6 +18,18 @@ class BeeForagingCycleMemoryTest {
         assertEquals(FLOWER, returned.completedFlower());
         assertEquals(HIVE, returned.completedHive());
         assertEquals(1, returned.completedTripsSinceRest());
+        var duplicateSample = memory.observe(BEE, false, null, HIVE, true, 451);
+        assertFalse(duplicateSample.completedTrip());
+        assertEquals(1, duplicateSample.completedTripsSinceRest());
+    }
+
+    @Test void hiveChangeDoesNotCompleteATripAgainstTheWrongColony() {
+        var memory = new BeeForagingCycleMemory();
+        memory.observe(BEE, false, null, HIVE, true, 100);
+        memory.observe(BEE, true, FLOWER, HIVE, false, 200);
+        var moved = memory.observe(BEE, false, null, HIVE + 1, true, 450);
+        assertFalse(moved.completedTrip());
+        assertEquals(0, moved.completedTripsSinceRest());
     }
 
     @Test void doesNotCountLostNectarAwayFromHiveAsSuccessfulTrip() {
