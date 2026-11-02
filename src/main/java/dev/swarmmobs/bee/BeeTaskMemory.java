@@ -34,6 +34,10 @@ public final class BeeTaskMemory {
         return selected;
     }
 
+    public void clear(UUID beeId) {
+        if (beeId != null) assignments.remove(beeId);
+    }
+
     public int size(long now) {
         if (now >= 0) prune(now);
         return assignments.size();

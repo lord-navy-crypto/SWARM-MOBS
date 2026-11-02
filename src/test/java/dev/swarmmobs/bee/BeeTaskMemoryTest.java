@@ -35,6 +35,15 @@ class BeeTaskMemoryTest {
         assertTrue(memory.size(30000) <= BeeTaskMemory.MAX_ASSIGNMENTS);
     }
 
+    @Test void clearAllowsWorkerToReevaluateAfterHiveExpansion() {
+        var memory = new BeeTaskMemory();
+        var buildNeeds = new BeeTaskPolicy.Needs(0.0, 0, 0, 1.0, 0);
+        assertEquals(BeeTaskPolicy.Task.BUILD, memory.assign(BEE, buildNeeds, 100));
+        memory.clear(BEE);
+        var forageNeeds = new BeeTaskPolicy.Needs(1.0, 0, 0, 0, 0);
+        assertEquals(BeeTaskPolicy.Task.FORAGE, memory.assign(BEE, forageNeeds, 101));
+    }
+
     @Test void invalidAssignmentInputsAreRejected() {
         var memory = new BeeTaskMemory();
         assertThrows(IllegalArgumentException.class, () ->

@@ -39,6 +39,9 @@ public final class BeeHiveEvents {
                 || !SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.get()
                 || !level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) return;
 
+        if (bee.hasNectar() || bee.getSavedFlowerPos() != null
+                || bee.hasStung() || bee.getTarget() != null) return;
+
         BlockPos home = bee.getHivePos();
         if (home == null || !level.hasChunkAt(home)
                 || !level.isInWorldBounds(home)
@@ -67,9 +70,17 @@ public final class BeeHiveEvents {
                         BeehiveBlock.MAX_HONEY_LEVELS, !hive.isFireNearby(),
                         true)) return;
 
+        long now = level.getGameTime();
+        double fatigue = BeeColonyRuntime.cycles(level).fatigue(bee.getUUID(), now);
+        BeeTaskPolicy.Needs needs = BeeFlowerEvents.colonyNeeds(
+                level, home, fatigue,
+                SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get(), true);
+        if (BeeColonyRuntime.tasks(level).assign(bee.getUUID(), needs, now)
+                != BeeTaskPolicy.Task.BUILD) return;
+
         BeeHiveGrowthMemory growthMemory = GROWTH_MEMORY.computeIfAbsent(
                 level, unused -> new BeeHiveGrowthMemory());
-        if (!growthMemory.claim(home.asLong(), level.getGameTime())) return;
+        if (!growthMemory.claim(home.asLong(), now)) return;
 
         var kind = natural ? ColonyPhysicalGrowth.Kind.BEE_NEST
                 : ColonyPhysicalGrowth.Kind.BEEHIVE;
@@ -106,6 +117,8 @@ public final class BeeHiveEvents {
             // Let the external bee discover the new home; stored bees remain
             // inside the original hive and are not teleported.
             bee.setHivePos(site);
+            bee.setSavedFlowerPos(null);
+            BeeColonyRuntime.tasks(level).clear(bee.getUUID());
             return;
         }
     }

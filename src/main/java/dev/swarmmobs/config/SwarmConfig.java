@@ -52,6 +52,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.DoubleValue NAV_RECOVERY_LATERAL_DISTANCE;
     public static final ModConfigSpec.IntValue NAV_RECOVERY_DURATION_TICKS;
     public static final ModConfigSpec.BooleanValue NAV_OBSTACLE_AVOIDANCE_ENABLED;
+    public static final ModConfigSpec.BooleanValue SPIDER_TERRAIN_ADAPTATION_ENABLED;
     public static final ModConfigSpec.DoubleValue NAV_OBSTACLE_LOOKAHEAD;
     public static final ModConfigSpec.DoubleValue NAV_OBSTACLE_LATERAL_DISTANCE;
     public static final ModConfigSpec.IntValue NAV_OBSTACLE_HOLD_TICKS;
@@ -276,6 +277,10 @@ public final class SwarmConfig {
         NAV_OBSTACLE_AVOIDANCE_ENABLED = BUILDER
                 .comment("Enable short-range terrain probing before issuing swarm navigation destinations.")
                 .define("navObstacleAvoidanceEnabled", true);
+
+        SPIDER_TERRAIN_ADAPTATION_ENABLED = BUILDER
+                .comment("Let vanilla Spider WallClimberNavigation handle safe 2-5 block vertical faces instead of forcing a horizontal detour. Requires local landing headroom; OFF restores generic obstacle detours.")
+                .define("spiderTerrainAdaptationEnabled", true);
 
         NAV_OBSTACLE_LOOKAHEAD = BUILDER
                 .comment("Forward probe and temporary detour distance, in blocks, for local obstacle avoidance.")

@@ -36,9 +36,11 @@ public final class SwarmMobs {
 
         NeoForge.EVENT_BUS.addListener(SwarmMobEvents::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(SwarmMobEvents::onEntityTick);
-        NeoForge.EVENT_BUS.addListener(BeeHiveEvents::onEntityTick);
-        NeoForge.EVENT_BUS.addListener(BeeColonyEvents::onEntityTick);
+        // Observe completed Bee trips and assign worker priorities before
+        // the shelter and hive-growth adapters consume the same tick's state.
         NeoForge.EVENT_BUS.addListener(BeeFlowerEvents::onEntityTick);
+        NeoForge.EVENT_BUS.addListener(BeeColonyEvents::onEntityTick);
+        NeoForge.EVENT_BUS.addListener(BeeHiveEvents::onEntityTick);
         NeoForge.EVENT_BUS.addListener(SwarmCommands::onRegisterCommands);
 
         LOGGER.info("Swarm Mobs {} initialized: deterministic swarm control active; local Ollama AI Shadow Mode available and OFF by default.",
