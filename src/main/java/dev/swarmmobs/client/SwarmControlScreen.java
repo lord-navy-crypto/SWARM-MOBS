@@ -20,7 +20,8 @@ public final class SwarmControlScreen extends Screen {
         COMMUNICATION("Communication"),
         SEARCH("Search & Prediction"),
         NAVIGATION("Navigation"),
-        BEES("Bee Ecology");
+        BEES("Bee Ecology"),
+        LEARNING("Player Learning");
 
         private final String label;
 
@@ -107,6 +108,7 @@ public final class SwarmControlScreen extends Screen {
             case SEARCH -> buildSearch();
             case NAVIGATION -> buildNavigation();
             case BEES -> buildBees();
+            case LEARNING -> buildPlayerLearning();
         }
     }
 
@@ -164,6 +166,58 @@ public final class SwarmControlScreen extends Screen {
         );
         addStatusRow(rightX, y, "Capacity",
                 "Vanilla hive storage; server-configured and bounded");
+    }
+
+    private void buildPlayerLearning() {
+        int leftX = width / 2 - 310;
+        int rightX = width / 2 + 10;
+        int y = 108;
+
+        addToggleRow(leftX, y, "Learn player combat and movement",
+                bool("playerLearningEnabled"), "player_learning_toggle");
+        addStatusRow(rightX, y, "Tracked players / hit samples",
+                (int) number("learningProfiles") + " / " + (int) number("learningSamples"));
+        y += 30;
+
+        addStatusRow(leftX, y, "Attack pattern",
+                values.getOrDefault("learningDominantStyle", "UNKNOWN"));
+        addStatusRow(rightX, y, "Movement pattern",
+                values.getOrDefault("motionDominantStyle", "UNKNOWN"));
+        y += 28;
+
+        addStatusRow(leftX, y, "Attack profile",
+                "M " + format(number("learningMeleeShare"))
+                        + "  P " + format(number("learningProjectileShare"))
+                        + "  X " + format(number("learningExplosiveShare")));
+        addStatusRow(rightX, y, "Movement profile",
+                "Still " + format(number("motionStationaryShare"))
+                        + "  Walk " + format(number("motionWalkingShare"))
+                        + "  Sprint " + format(number("motionSprintingShare"))
+                        + "  Erratic " + format(number("motionErraticShare")));
+        y += 28;
+
+        addStatusRow(leftX, y, "Evidence",
+                (int) number("motionProfiles") + " movement profiles / "
+                        + (int) number("motionSamples") + " decayed samples");
+        addStatusRow(rightX, y, "Privacy",
+                "Session-only summaries; no raw paths or uploads");
+        y += 30;
+
+        addNumericRow(leftX, y, "Tactical pattern hold",
+                (int) number("tacticalPatternHysteresisTicks") + " ticks",
+                "tactical_pattern_hysteresis_delta", 2.0);
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal("Reset learned player profiles"),
+                        button -> SwarmControlClient.sendAction("player_learning_reset", 0.0)
+                ).bounds(rightX, y, 300, 20).build()
+        );
+        y += 30;
+
+        addStatusRow(leftX, y, "Response",
+                "Melee: compact · Projectile / explosive: wider spacing");
+        addStatusRow(rightX, y, "Motion",
+                "Fast / erratic movement: broader coverage and bounded lead");
     }
 
     private void buildOverview() {

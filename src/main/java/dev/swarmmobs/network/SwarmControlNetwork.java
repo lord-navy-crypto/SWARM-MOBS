@@ -9,6 +9,8 @@ import dev.swarmmobs.agent.SwarmAgentState;
 import dev.swarmmobs.agent.SwarmSpecialization;
 import dev.swarmmobs.agent.SwarmTaskType;
 import dev.swarmmobs.ai.SwarmAiActiveState;
+import dev.swarmmobs.ai.SwarmPlayerStyleRegistry;
+import dev.swarmmobs.ai.SwarmPlayerMotionRegistry;
 import dev.swarmmobs.data.SwarmAttachments;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.EntityType;
@@ -77,9 +79,14 @@ public final class SwarmControlNetwork {
 
         // Absolute setters make Save idempotent even after reopening or packet retries.
         if (payload.action().startsWith("set:")) {
-            if (!applyAbsoluteAction(payload.action().substring(4), payload.value())) {
+            String absoluteAction = payload.action().substring(4);
+            if (!applyAbsoluteAction(absoluteAction, payload.value())) {
                 sendSnapshot(player);
                 return;
+            }
+            if ("player_learning_toggle".equals(absoluteAction) && payload.value() < 0.5) {
+                SwarmPlayerStyleRegistry.clearAll();
+                SwarmPlayerMotionRegistry.clearAll();
             }
             SwarmExperimentManager.markCustom();
         } else {
@@ -109,6 +116,12 @@ public final class SwarmControlNetwork {
             case "bee_age_speed" -> { SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.set((int) Math.round(Math.max(1, Math.min(8, value)))); return true; }
             case "bee_honey_multiplier" -> { SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.set((int) Math.round(Math.max(1, Math.min(5, value)))); return true; }
             case "toggle_master" -> { SwarmConfig.ENABLED.set(value >= 0.5); return true; }
+            case "player_learning_toggle" -> { SwarmConfig.PLAYER_LEARNING_ENABLED.set(value >= 0.5); return true; }
+            case "tactical_pattern_hysteresis_ticks" -> {
+                SwarmConfig.TACTICAL_PATTERN_HYSTERESIS_TICKS.set(
+                        (int) Math.round(Math.max(0, Math.min(100, value))));
+                return true;
+            }
             case "ai_toggle" -> { SwarmConfig.EXTERNAL_AI_ENABLED.set(value >= 0.5); if (value < 0.5) SwarmAiActiveState.clear(); return true; }
             case "ai_active_toggle" -> { SwarmConfig.EXTERNAL_AI_ACTIVE_ENABLED.set(value >= 0.5); if (value < 0.5) SwarmAiActiveState.clear(); return true; }
             case "toggle_engineering" -> { SwarmConfig.ZOMBIE_ENGINEERING_ENABLED.set(value >= 0.5); return true; }
@@ -232,6 +245,21 @@ public final class SwarmControlNetwork {
             case "toggle_master" -> SwarmConfig.ENABLED.set(!SwarmConfig.ENABLED.get());
             case "support_position_toggle" -> SwarmConfig.SUPPORT_POSITION_OPTIMIZATION_ENABLED.set(
                     !SwarmConfig.SUPPORT_POSITION_OPTIMIZATION_ENABLED.get());
+
+            case "player_learning_toggle" -> {
+                boolean next = !SwarmConfig.PLAYER_LEARNING_ENABLED.get();
+                SwarmConfig.PLAYER_LEARNING_ENABLED.set(next);
+                if (!next) {
+                    SwarmPlayerStyleRegistry.clearAll();
+                    SwarmPlayerMotionRegistry.clearAll();
+                }
+            }
+            case "player_learning_reset" -> {
+                SwarmPlayerStyleRegistry.clear(player.serverLevel());
+                SwarmPlayerMotionRegistry.clear(player.serverLevel());
+            }
+            case "tactical_pattern_hysteresis_delta" -> SwarmConfig.TACTICAL_PATTERN_HYSTERESIS_TICKS.set(
+                    (int) clamp(SwarmConfig.TACTICAL_PATTERN_HYSTERESIS_TICKS.get() + value, 0, 100));
 
             case "ai_toggle" -> {
                 boolean next = !SwarmConfig.EXTERNAL_AI_ENABLED.get();
@@ -764,6 +792,8 @@ public final class SwarmControlNetwork {
         var ai = SwarmAiShadowState.snapshot();
         var decision = ai.lastDecision();
         var activeAi = SwarmAiActiveState.snapshot(level.getGameTime());
+        var playerLearning = SwarmPlayerStyleRegistry.summary(level, level.getGameTime());
+        var playerMotion = SwarmPlayerMotionRegistry.summary(level, level.getGameTime());
         boolean masterEnabled = SwarmConfig.ENABLED.get();
         boolean exposeDynamicAssignments =
                 SwarmControlEffectiveStatePolicy.exposeDynamicAssignments(
@@ -931,6 +961,24 @@ public final class SwarmControlNetwork {
                 pair("aiSearchRadiusMultiplier", decision.searchRadiusMultiplier()),
                 pair("aiRationale", decision.rationale()),
                 pair("aiLastError", ai.lastError()),
+                pair("playerLearningEnabled", SwarmConfig.PLAYER_LEARNING_ENABLED.get()),
+                pair("learningProfiles", playerLearning.profiles()),
+                pair("learningSamples", playerLearning.samples()),
+                pair("learningDominantStyle", playerLearning.dominantStyle().name()),
+                pair("learningMeleeShare", playerLearning.meleeShare()),
+                pair("learningProjectileShare", playerLearning.projectileShare()),
+                pair("learningExplosiveShare", playerLearning.explosiveShare()),
+                pair("learningFireShare", playerLearning.fireShare()),
+                pair("learningMagicShare", playerLearning.magicShare()),
+                pair("learningOtherShare", playerLearning.otherShare()),
+                pair("motionProfiles", playerMotion.profiles()),
+                pair("motionSamples", playerMotion.samples()),
+                pair("motionDominantStyle", playerMotion.dominantStyle().name()),
+                pair("motionStationaryShare", playerMotion.stationaryShare()),
+                pair("motionWalkingShare", playerMotion.walkingShare()),
+                pair("motionSprintingShare", playerMotion.sprintingShare()),
+                pair("motionErraticShare", playerMotion.erraticShare()),
+                pair("tacticalPatternHysteresisTicks", SwarmConfig.TACTICAL_PATTERN_HYSTERESIS_TICKS.get()),
                 pair("master", masterEnabled),
                 pair("liveBees", liveBees),
                 pair("beeReproductionEnabled", SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.get()),
