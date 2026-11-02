@@ -6083,6 +6083,11 @@ public final class SwarmRuntimeGameTests {
                 return;
             }
             for (int i = 0; i < SwarmConfig.BEE_HIVE_CAPACITY.get(); i++) {
+                if (hive.isFull()) {
+                    helper.fail("Vanilla hive reported full before configured capacity was reached at "
+                            + hive.getOccupantCount());
+                    return;
+                }
                 Bee stored = helper.spawn(EntityType.BEE, new BlockPos(1, 1, 1));
                 stored.setNoAi(true);
                 stored.setHivePos(home);
@@ -6163,6 +6168,11 @@ public final class SwarmRuntimeGameTests {
                 return;
             }
             for (int i = 0; i < SwarmConfig.BEE_HIVE_CAPACITY.get(); i++) {
+                if (fullHive.isFull()) {
+                    helper.fail("Connected hive reported full before configured capacity was reached at "
+                            + fullHive.getOccupantCount());
+                    return;
+                }
                 Bee stored = helper.spawn(EntityType.BEE, new BlockPos(1, 1, 1));
                 stored.setNoAi(true);
                 stored.setHivePos(first);
