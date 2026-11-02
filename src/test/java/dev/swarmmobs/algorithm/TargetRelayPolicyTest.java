@@ -127,14 +127,16 @@ class TargetRelayPolicyTest {
     void spatialOutliersAndOtherTargetsAreExcluded() {
         UUID target = UUID.randomUUID();
         UUID other = UUID.randomUUID();
+        TargetObservation anchor = new TargetObservation(
+                target, 100, 10.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0);
         var result = TargetRelayPolicy.fuseFreshest(100, 40, List.of(
-                new TargetObservation(target, 100, 10.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+                anchor,
                 new TargetObservation(target, 100, 30.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0),
                 new TargetObservation(other, 100, 11.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0)
         ), 4, 8.0).orElseThrow();
 
         assertEquals(1, result.contributors());
-        assertSame(result.observation(), result.observation());
+        assertSame(anchor, result.observation());
         assertEquals(target, result.observation().targetId());
         assertEquals(10.0, result.observation().x(), 1.0e-9);
     }
