@@ -24,8 +24,8 @@ public abstract class BeehiveBlockEntityMixin {
         return hive.getOccupantCount() >= SwarmConfig.BEE_HIVE_CAPACITY.get();
     }
 
-    @ModifyConstant(method = "addOccupant", constant = @Constant(intValue = 3),
-            ordinal = 0, require = 0, remap = false)
+    @ModifyConstant(method = "addOccupant", constant = @Constant(intValue = 3, ordinal = 0),
+            require = 0, remap = false)
     private int swarmmobs$configuredAddOccupantLimit(int original) {
         return SwarmConfig.BEE_HIVE_CAPACITY.get();
     }
