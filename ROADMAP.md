@@ -385,3 +385,40 @@ Runtime integration:
 - active Ollama strategy may bias task demand (for example ENCIRCLE raises FLANK demand), but it still cannot choose a specific agent or exact coordinate.
 
 This layer is intentionally decentralized and reproducible: no random per-tick role lottery and no LLM per-agent commands.
+
+## v0.13 — species intelligence and collective tactics (PLANNED)
+
+Tracking issue: https://github.com/lord-navy-crypto/SWARM-MOBS/issues/87
+
+This milestone builds on the deterministic heterogeneous swarm and dynamic division of labor. It is a plan only; no implementation is implied by this section.
+
+Planned workstreams:
+
+1. **Species-specific intelligence**
+   - Zombie assault cohesion, lane discipline, pressure distribution, and support handoffs.
+   - Skeleton firing-position selection, ally-lane clearance, and ranged spacing.
+   - Creeper lead/reserve coordination and approach spacing, without changing fuse or explosion behavior.
+   - Spider three-dimensional navigation and flank persistence, beginning with in-world validation of PR #86's native climbing handoff.
+   - Bee colony ecology: flower quality/competition, foraging-cycle feedback, worker task balance, shelter recovery, and safe hive expansion.
+
+2. **Adaptive collective organization**
+   - Re-evaluate local composition on joins, departures, deaths, target loss, and reacquisition.
+   - Repair role coverage and scale formations with group size while preserving role hysteresis.
+   - Clear stale task assignments after state changes.
+
+3. **Multi-stage encounter and search coordination**
+   - Improve target-loss search-sector coverage, reduce duplicate search work, and support local regrouping.
+   - Add bounded APPROACH / SCREEN / FLANK / SURROUND / RECOVER / SEARCH / RETURN-TO-FORMATION transitions.
+   - Keep decisions local, observation-bound, and terrain-validated.
+
+4. **Evaluation and performance**
+   - Track role balance, role-switch rate, reacquisition latency, search coverage, formation congestion, species contribution, navigation acceptance/progress, path-query counts, and tick cost.
+   - Add deterministic JUnit tests, runtime GameTests, and disposable-world playtests at group sizes 4, 8, 16, and 24.
+
+Release constraints:
+- Preserve vanilla damage, projectile behavior, Creeper fuse, and Bee sting behavior.
+- No omniscient target tracking, forced chunk loads, global per-tick entity scans, or unbounded persistent memory.
+- Keep external AI optional and above deterministic low-level navigation/safety.
+- Zombie block breaking, material gathering, resource collection, and Zombie nest construction remain archived/paused. Exploration-oriented nest information may remain, but must not restart resource collection.
+- Bee hive expansion remains active as a separate ecology feature.
+- Do not mark the milestone complete until real Minecraft playtests confirm the behaviors; CI alone is insufficient.
