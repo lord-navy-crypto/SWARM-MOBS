@@ -20,7 +20,7 @@ class BeePoliciesTest {
     @Test
     void taskAllocationRespondsToThreatAndUsesSwitchHysteresis() {
         var worker = new BeeTaskPolicy.Worker(1, 1, 1, 1);
-        var needs = new BeeTaskPolicy.Needs(0.4, 0.2, 0.95, 0.1, 0);
+        var needs = new BeeTaskPolicy.Needs(0.4, 0.2, 0.6, 0.1, 0);
         assertEquals(BeeTaskPolicy.Task.GUARD,
                 BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.FORAGE, 0.1));
         assertEquals(BeeTaskPolicy.Task.FORAGE,

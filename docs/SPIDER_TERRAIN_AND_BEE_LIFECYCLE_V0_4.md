@@ -33,7 +33,7 @@ The last actually observed flower is credited once on that transition. The previ
 The shared task memory now has operational effects:
 
 - **FORAGE:** select a fresh, previously observed flower patch using utility, confidence, distance, competition, and danger.
-- **GUARD:** when shelter behavior is enabled and nearby hostile pressure is observed, clear the optional flower destination and request a return to the home hive. Vanilla combat behavior is not replaced.
+- **GUARD:** observed hostile pressure suppresses new flower recruitment. The separate hive-alarm adapter chooses its deterministic sheltering fraction and returns only selected unladen Bees; it does not assign attack targets.
 - **BUILD:** the hive-growth adapter may expand only when the hive is full, honey is full, mobGriefing permits it, a safe adjacent site exists, and the worker's current task is BUILD.
 - **REST:** repeated completed trips accumulate a bounded fatigue heuristic. At high fatigue, the Bee clears its optional flower destination and returns to its own hive. A rest request is considered complete only after the Bee disappears from entity ticking and later reappears near that hive.
 

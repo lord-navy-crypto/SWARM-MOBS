@@ -68,10 +68,10 @@ public final class BeeFlowerEvents {
                         home.getX() + 0.5, home.getY() + 0.5, home.getZ() + 0.5)
                         <= 48.0 * 48.0)) return;
 
-        // Never override a loaded nectar delivery, active flower destination,
-        // vanilla sting response, or existing combat target.
-        if (bee.hasNectar() || savedFlower != null
-                || bee.hasStung() || bee.getTarget() != null) return;
+        // Do not override a loaded nectar delivery, vanilla sting response,
+        // or an existing combat target. REST may cancel only the optional
+        // saved flower destination after repeated completed trips.
+        if (bee.hasNectar() || bee.hasStung() || bee.getTarget() != null) return;
 
         BeeTaskPolicy.Needs needs = colonyNeeds(level, home,
                 cycle.fatigue(), SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get(),
@@ -79,10 +79,8 @@ public final class BeeFlowerEvents {
         BeeTaskPolicy.Task task = BeeColonyRuntime.tasks(level).assign(
                 bee.getUUID(), needs, now);
 
-        if (task == BeeTaskPolicy.Task.REST || task == BeeTaskPolicy.Task.GUARD) {
-            if (task == BeeTaskPolicy.Task.REST) {
-                BeeColonyRuntime.cycles(level).markRestRequested(bee.getUUID(), now);
-            }
+        if (task == BeeTaskPolicy.Task.REST) {
+            BeeColonyRuntime.cycles(level).markRestRequested(bee.getUUID(), now);
             bee.setSavedFlowerPos(null);
             bee.setStayOutOfHiveCountdown(0);
             double homeDistanceSquared = bee.distanceToSqr(
@@ -96,6 +94,10 @@ public final class BeeFlowerEvents {
             }
             return;
         }
+
+        // GUARD suppresses new flower recruitment, while BeeColonyEvents
+        // independently chooses the sheltering fraction for an active alarm.
+        if (task == BeeTaskPolicy.Task.GUARD || savedFlower != null) return;
 
         // BUILD is executed by BeeHiveEvents when the loaded hive is truly
         // full and has surplus honey. NURSE remains unassigned because vanilla
