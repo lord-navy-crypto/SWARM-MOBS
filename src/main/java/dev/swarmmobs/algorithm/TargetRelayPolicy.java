@@ -153,24 +153,15 @@ public final class TargetRelayPolicy {
             }
 
             double confidence = record.confidence(currentTick, horizon);
-            double weight = confidence / (1.0 + delta)
-                    / (1.0 + disagreement * 0.05);
+            double weight = confidence / (1.0 + delta);
             if (!Double.isFinite(weight) || weight <= 0.0) continue;
 
             weightSum += weight;
             xSum += projectedX * weight;
             ySum += record.y() * weight;
             zSum += projectedZ * weight;
-            if (Double.isFinite(record.forwardX())) {
-                forwardXSum += record.forwardX() * weight;
-            } else {
-                forwardXSum += anchor.forwardX() * weight;
-            }
-            if (Double.isFinite(record.forwardZ())) {
-                forwardZSum += record.forwardZ() * weight;
-            } else {
-                forwardZSum += anchor.forwardZ() * weight;
-            }
+            forwardXSum += finiteOr(record.forwardX(), finiteOr(anchor.forwardX(), 0.0)) * weight;
+            forwardZSum += finiteOr(record.forwardZ(), finiteOr(anchor.forwardZ(), 0.0)) * weight;
             if (record.hasFiniteVelocity()) {
                 velocityXSum += record.velocityX() * weight;
                 velocityZSum += record.velocityZ() * weight;
@@ -195,6 +186,10 @@ public final class TargetRelayPolicy {
                 velocityZSum / weightSum
         );
         return Optional.of(new FusionResult(fused, contributors, maxDisagreement));
+    }
+
+    private static double finiteOr(double value, double fallback) {
+        return Double.isFinite(value) ? value : fallback;
     }
 
     private static boolean validPosition(TargetObservation record) {
