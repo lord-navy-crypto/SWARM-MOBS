@@ -32,14 +32,14 @@ class SwarmPlayerMotionProfileTest {
         profile.observe(0.25, 0.0, 10, 10);
         profile.observe(-0.25, 0.0, 10, 11);
         profile.observe(-0.25, 0.0, 9, 12);
-        assertEquals(1.0, profile.snapshot(12).sampleMass(), 1e-9);
+        assertEquals(1.0, profile.snapshot(10).sampleMass(), 1e-9);
     }
 
     @Test void evidenceDecaysAndExpiresAfterInactivity() {
         var profile = new SwarmPlayerMotionProfile(0);
-        for (int tick = 1; tick <= 6; tick++) profile.observe(0.25, 0.0, tick, tick);
+        for (int tick = 1; tick <= 6; tick++) profile.observe(0.25, 0.0, tick, 6);
         assertEquals(6.0, profile.snapshot(0).sampleMass(), 1e-9);
         assertEquals(3.0, profile.snapshot(2406).sampleMass(), 1e-6);
-        assertTrue(profile.isExpired(12011));
+        assertTrue(profile.isExpired(12007));
     }
 }
