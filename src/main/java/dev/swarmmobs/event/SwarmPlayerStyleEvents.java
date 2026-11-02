@@ -13,7 +13,6 @@ import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 public final class SwarmPlayerStyleEvents {
     public static void onLivingDamagePost(LivingDamageEvent.Post event) {
         if (!SwarmConfig.PLAYER_LEARNING_ENABLED.get()
-                || event.getInflictedDamage() <= 0.0F
                 || !(event.getEntity() instanceof PathfinderMob mob)
                 || !SwarmAgentProfiles.isSupported(mob)
                 || !(mob.level() instanceof ServerLevel level)
