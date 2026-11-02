@@ -83,56 +83,20 @@ public final class SwarmPlayerStyleRegistry {
     ) {}
 
     private static final int MAX_PROFILES = 64;
-    private static final long HALF_LIFE_TICKS = 2400L;
-    private static final long PROFILE_TTL_TICKS = 12000L;
     private static final double MIN_CONFIDENT_SAMPLES = 5.0;
     private static final double DOMINANT_SHARE = 0.55;
     private static final double MIN_DOMINANCE_MARGIN = 0.15;
-    private static final Map<ServerLevel, LinkedHashMap<UUID, MutableProfile>> LEVELS =
+    private static final Map<ServerLevel, LinkedHashMap<UUID, SwarmPlayerStyleProfile>> LEVELS =
             new WeakHashMap<>();
-
-    private static final class MutableProfile {
-        private final double[] counts = new double[6];
-        private double sampleMass;
-        private long lastDecayTick;
-        private long lastObservedTick;
-
-        private MutableProfile(long now) {
-            lastDecayTick = now;
-            lastObservedTick = now;
-        }
-
-        private void observe(AttackStyle style, long now) {
-            decay(now);
-            counts[index(style)] += 1.0;
-            sampleMass += 1.0;
-            lastObservedTick = now;
-        }
-
-        private void decay(long now) {
-            if (now <= lastDecayTick) return;
-            double factor = Math.pow(0.5,
-                    (double) (now - lastDecayTick) / HALF_LIFE_TICKS);
-            for (int i = 0; i < counts.length; i++) counts[i] *= factor;
-            sampleMass *= factor;
-            lastDecayTick = now;
-        }
-
-        private ProfileSnapshot snapshot(long now) {
-            decay(now);
-            return new ProfileSnapshot(counts[0], counts[1], counts[2],
-                    counts[3], counts[4], counts[5], sampleMass, lastObservedTick);
-        }
-    }
 
     public static synchronized void observe(ServerLevel level, UUID playerId,
             AttackStyle style, long now) {
         if (level == null || playerId == null || style == null
                 || style == AttackStyle.MIXED || style == AttackStyle.UNKNOWN) return;
-        LinkedHashMap<UUID, MutableProfile> profiles =
+        LinkedHashMap<UUID, SwarmPlayerStyleProfile> profiles =
                 LEVELS.computeIfAbsent(level, ignored -> new LinkedHashMap<>());
         expire(profiles, now);
-        MutableProfile profile = profiles.remove(playerId);
+        SwarmPlayerStyleProfile profile = profiles.remove(playerId);
         if (profile == null) {
             if (profiles.size() >= MAX_PROFILES) {
                 Iterator<UUID> oldest = profiles.keySet().iterator();
@@ -141,7 +105,7 @@ public final class SwarmPlayerStyleRegistry {
                     oldest.remove();
                 }
             }
-            profile = new MutableProfile(now);
+            profile = new SwarmPlayerStyleProfile(now);
         }
         profile.observe(style, now);
         profiles.put(playerId, profile);
@@ -150,22 +114,22 @@ public final class SwarmPlayerStyleRegistry {
     public static synchronized ProfileSnapshot snapshot(ServerLevel level,
             UUID playerId, long now) {
         if (level == null || playerId == null) return null;
-        LinkedHashMap<UUID, MutableProfile> profiles = LEVELS.get(level);
+        LinkedHashMap<UUID, SwarmPlayerStyleProfile> profiles = LEVELS.get(level);
         if (profiles == null) return null;
         expire(profiles, now);
-        MutableProfile profile = profiles.get(playerId);
+        SwarmPlayerStyleProfile profile = profiles.get(playerId);
         return profile == null ? null : profile.snapshot(now);
     }
 
     public static synchronized Summary summary(ServerLevel level, long now) {
         if (level == null) return emptySummary();
-        LinkedHashMap<UUID, MutableProfile> profiles = LEVELS.get(level);
+        LinkedHashMap<UUID, SwarmPlayerStyleProfile> profiles = LEVELS.get(level);
         if (profiles == null || profiles.isEmpty()) return emptySummary();
         expire(profiles, now);
 
         double[] totals = new double[6];
         double sampleMass = 0.0;
-        for (MutableProfile profile : profiles.values()) {
+        for (SwarmPlayerStyleProfile profile : profiles.values()) {
             ProfileSnapshot snapshot = profile.snapshot(now);
             totals[0] += snapshot.melee();
             totals[1] += snapshot.projectile();
@@ -196,9 +160,9 @@ public final class SwarmPlayerStyleRegistry {
         LEVELS.clear();
     }
 
-    private static void expire(LinkedHashMap<UUID, MutableProfile> profiles, long now) {
+    private static void expire(LinkedHashMap<UUID, SwarmPlayerStyleProfile> profiles, long now) {
         profiles.entrySet().removeIf(entry ->
-                now - entry.getValue().lastObservedTick > PROFILE_TTL_TICKS);
+                entry.getValue().isExpired(now));
     }
 
     private static int index(AttackStyle style) {

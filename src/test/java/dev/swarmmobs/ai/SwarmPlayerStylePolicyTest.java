@@ -45,4 +45,34 @@ class SwarmPlayerStylePolicyTest {
         assertEquals(1.0, SwarmPlayerStylePolicy.choose(projectile, false)
                 .separationMultiplier());
     }
+
+    @Test void meleeAndExplosivePatternsUseTheirBoundedResponses() {
+        var melee = new SwarmPlayerStyleRegistry.ProfileSnapshot(
+                10.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 100);
+        var meleeDecision = SwarmPlayerStylePolicy.choose(melee, true);
+        assertEquals(SwarmPlayerStyleRegistry.AttackStyle.MELEE, meleeDecision.style());
+        assertEquals(0.92, meleeDecision.formationRadiusMultiplier());
+        assertEquals(0.94, meleeDecision.separationMultiplier());
+        assertEquals(1.08, meleeDecision.cohesionMultiplier());
+
+        var explosive = new SwarmPlayerStyleRegistry.ProfileSnapshot(
+                0.0, 0.0, 10.0, 0.0, 0.0, 0.0, 10.0, 100);
+        var explosiveDecision = SwarmPlayerStylePolicy.choose(explosive, true);
+        assertEquals(SwarmPlayerStyleRegistry.AttackStyle.EXPLOSIVE, explosiveDecision.style());
+        assertEquals(1.24, explosiveDecision.formationRadiusMultiplier());
+        assertEquals(1.22, explosiveDecision.separationMultiplier());
+        assertEquals(0.88, explosiveDecision.cohesionMultiplier());
+    }
+
+    @Test void fireAndOtherPatternsAreExplicitlyClassified() {
+        var fire = new SwarmPlayerStyleRegistry.ProfileSnapshot(
+                0.0, 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 100);
+        assertEquals(SwarmPlayerStyleRegistry.AttackStyle.FIRE,
+                SwarmPlayerStylePolicy.choose(fire, true).style());
+
+        var other = new SwarmPlayerStyleRegistry.ProfileSnapshot(
+                0.0, 0.0, 0.0, 0.0, 0.0, 10.0, 10.0, 100);
+        assertEquals(SwarmPlayerStyleRegistry.AttackStyle.OTHER,
+                SwarmPlayerStylePolicy.choose(other, true).style());
+    }
 }
