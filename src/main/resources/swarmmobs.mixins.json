@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.swarmmobs.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "BeehiveBlockEntityMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

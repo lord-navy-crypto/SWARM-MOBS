@@ -19,7 +19,8 @@ public final class SwarmControlScreen extends Screen {
         SENSING("Sensing"),
         COMMUNICATION("Communication"),
         SEARCH("Search & Prediction"),
-        NAVIGATION("Navigation");
+        NAVIGATION("Navigation"),
+        BEES("Bee Ecology");
 
         private final String label;
 
@@ -105,7 +106,64 @@ public final class SwarmControlScreen extends Screen {
             case COMMUNICATION -> buildCommunication();
             case SEARCH -> buildSearch();
             case NAVIGATION -> buildNavigation();
+            case BEES -> buildBees();
         }
+    }
+
+    private void buildBees() {
+        int leftX = width / 2 - 310;
+        int rightX = width / 2 + 10;
+        int y = 108;
+
+        addToggleRow(leftX, y, "Colony reproduction",
+                bool("beeReproductionEnabled"), "bee_reproduction_toggle");
+        addStatusRow(rightX, y, "Loaded living Bees",
+                Integer.toString((int) number("liveBees")));
+        y += 28;
+
+        addNumericRow(leftX, y, "Bees per hive",
+                Integer.toString((int) number("beeHiveCapacity")),
+                "bee_capacity_delta", 1.0);
+        addNumericRow(rightX, y, "Colony population cap",
+                Integer.toString((int) number("beeColonyMaxPopulation")),
+                "bee_population_delta", 4.0);
+        y += 28;
+
+        addNumericRow(leftX, y, "Birth interval",
+                (int) number("beeReproductionInterval") + " ticks",
+                "bee_reproduction_interval_delta", 600.0);
+        addNumericRow(rightX, y, "Baby / breeding speed",
+                (int) number("beeAgeSpeed") + "x",
+                "bee_age_speed_delta", 1.0);
+        y += 28;
+
+        addToggleRow(leftX, y, "Bonus honey production",
+                bool("beeHoneyBonusEnabled"), "bee_honey_toggle");
+        addNumericRow(rightX, y, "Honey production multiplier",
+                (int) number("beeHoneyMultiplier") + "x",
+                "bee_honey_multiplier_delta", 1.0);
+        y += 28;
+
+        addToggleRow(leftX, y, "Connected hive expansion",
+                bool("beeHiveGrowthEnabled"), "bee_growth_toggle");
+        addToggleRow(rightX, y, "Flower sharing / recruitment",
+                bool("beeFlowerRecruitmentEnabled"), "bee_flower_toggle");
+        y += 28;
+
+        addToggleRow(leftX, y, "Colony shelter alarms",
+                bool("beeShelterEnabled"), "bee_shelter_toggle");
+        addStatusRow(rightX, y, "Behavioral castes",
+                "FORAGER / NURSE / GUARD / BUILDER / SCOUT");
+        y += 34;
+
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal("Bee ecology baseline"),
+                        button -> SwarmControlClient.sendAction("bee_baseline", 0.0)
+                ).bounds(leftX, y, 300, 20).build()
+        );
+        addStatusRow(rightX, y, "Capacity",
+                "Vanilla hive storage; server-configured and bounded");
     }
 
     private void buildOverview() {

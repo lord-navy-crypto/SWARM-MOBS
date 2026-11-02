@@ -16,6 +16,7 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 repositories {
     mavenCentral()
     maven { url = "https://maven.architectury.dev/" }
+    maven { url = "https://repo.spongepowered.org/repository/maven-public/" }
 }
 
 neoForge {
@@ -54,6 +55,7 @@ neoForge {
 }
 
 dependencies {
+    compileOnly 'org.spongepowered:mixin:0.8.7'
     implementation "me.shedaniel.cloth:cloth-config-neoforge:${cloth_config_version}"
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testImplementation 'com.google.code.gson:gson:2.11.0'

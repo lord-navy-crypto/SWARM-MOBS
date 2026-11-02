@@ -1,7 +1,6 @@
 package dev.swarmmobs.bee;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -25,6 +24,14 @@ public final class BeeTaskMemory {
         if (old != null && now < old.updatedAt()) return old.task();
         BeeTaskPolicy.Task previous = old == null
                 ? BeeTaskPolicy.Task.FORAGE : old.task();
+        // A full hive or completed rest can suppress fatigue to zero. Do not
+        // keep a stale REST assignment alive after its need has disappeared.
+        if ((previous == BeeTaskPolicy.Task.REST && needs.fatigue() == 0.0)
+                || (previous == BeeTaskPolicy.Task.BUILD && needs.spaceShortage() == 0.0)
+                || (previous == BeeTaskPolicy.Task.GUARD && needs.threat() == 0.0)
+                || (previous == BeeTaskPolicy.Task.NURSE && needs.broodDemand() == 0.0)) {
+            previous = BeeTaskPolicy.Task.FORAGE;
+        }
         BeeTaskPolicy.Task selected = BeeTaskPolicy.select(
                 needs, workerProfile(beeId), previous, SWITCH_PENALTY);
         assignments.put(beeId, new Assignment(selected, now));
@@ -32,6 +39,10 @@ public final class BeeTaskMemory {
             assignments.remove(assignments.keySet().iterator().next());
         }
         return selected;
+    }
+
+    public void clear(UUID beeId) {
+        if (beeId != null) assignments.remove(beeId);
     }
 
     public int size(long now) {
@@ -46,20 +57,6 @@ public final class BeeTaskMemory {
     }
 
     private static BeeTaskPolicy.Worker workerProfile(UUID id) {
-        int hash = id.hashCode();
-        double forage = unit(hash);
-        double nurse = unit(Integer.rotateLeft(hash, 7));
-        double guard = unit(Integer.rotateLeft(hash, 13));
-        double build = unit(Integer.rotateLeft(hash, 21));
-        return new BeeTaskPolicy.Worker(
-                0.55 + 0.45 * forage,
-                0.20 + 0.55 * nurse,
-                0.10 + 0.90 * guard,
-                0.15 + 0.70 * build
-        );
-    }
-
-    private static double unit(int value) {
-        return (Integer.toUnsignedLong(value) & 0xFFFFL) / 65535.0;
+        return BeeCastePolicy.workerProfile(id);
     }
 }

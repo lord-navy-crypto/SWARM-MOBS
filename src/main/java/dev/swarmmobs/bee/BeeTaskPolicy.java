@@ -68,9 +68,10 @@ public final class BeeTaskPolicy {
         return switch (task) {
             case FORAGE -> n.nectarShortage() * (0.5 + 0.5 * w.foragingBias());
             case NURSE -> n.broodDemand() * (0.5 + 0.5 * w.nursingBias());
-            case GUARD -> n.threat() * (0.5 + 0.5 * w.guardingBias());
+            case GUARD -> n.threat() * (1.15 + 0.45 * w.guardingBias());
             case BUILD -> n.spaceShortage() * (0.5 + 0.5 * w.buildingBias());
-            case REST -> n.fatigue();
+            // Rest is deliberately a strong but bounded response to repeated trips.
+            case REST -> n.fatigue() * 1.25;
         };
     }
 }

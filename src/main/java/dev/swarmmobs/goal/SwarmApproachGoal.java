@@ -21,6 +21,7 @@ import dev.swarmmobs.algorithm.SwarmLocalPlannerPolicy;
 import dev.swarmmobs.algorithm.SwarmPathEvidencePolicy;
 import dev.swarmmobs.algorithm.SwarmNavigationRecoveryPolicy;
 import dev.swarmmobs.algorithm.SwarmSpeciesNavigationPolicy;
+import dev.swarmmobs.algorithm.SwarmSpiderTerrainPolicy;
 import dev.swarmmobs.algorithm.SwarmRouteFailureRegistry;
 import dev.swarmmobs.algorithm.SwarmRecoveryCandidatePolicy;
 import dev.swarmmobs.algorithm.SwarmRangedHandoffPolicy;
@@ -41,6 +42,8 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Zombie;
 import net.minecraft.world.entity.ai.goal.Goal;
+import net.minecraft.world.entity.ai.navigation.WallClimberNavigation;
+import net.minecraft.world.entity.monster.Spider;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.ArrayList;
@@ -476,7 +479,8 @@ public final class SwarmApproachGoal extends Goal {
                 var avoidance = localObstacleAvoidance(
                         level,
                         new Vec2(mob.getX(), mob.getZ()),
-                        new Vec2(state.destinationX(), state.destinationZ())
+                        new Vec2(state.destinationX(), state.destinationZ()),
+                        targetY
                 );
                 if (avoidance == null) {
                     // Evidence budget denied this entire detour episode.
@@ -612,7 +616,8 @@ public final class SwarmApproachGoal extends Goal {
     private SwarmObstacleAvoidancePolicy.Avoidance localObstacleAvoidance(
             ServerLevel level,
             Vec2 self,
-            Vec2 destination
+            Vec2 destination,
+            double targetY
     ) {
         Vec2 toTarget = destination.subtract(self);
         double distance = toTarget.length();
@@ -631,6 +636,14 @@ public final class SwarmApproachGoal extends Goal {
         Vec2 frontProbe = self.add(forward.scale(Math.min(distance, lookahead)));
         boolean frontBlocked = isProbeBlocked(level, frontProbe.x(), frontProbe.z());
         if (!frontBlocked) {
+            SwarmPathBudgetRegistry.cancel(level, mob);
+            return new SwarmObstacleAvoidancePolicy.Avoidance(destination, false, 0);
+        }
+
+        // Spiders already own a native WallClimberNavigation. If the local
+        // wall is a bounded vertical face with safe landing headroom, let that
+        // navigator climb it instead of diverting the Spider sideways.
+        if (canUseSpiderClimbLane(level, frontProbe.x(), frontProbe.z(), targetY)) {
             SwarmPathBudgetRegistry.cancel(level, mob);
             return new SwarmObstacleAvoidancePolicy.Avoidance(destination, false, 0);
         }
@@ -757,6 +770,50 @@ public final class SwarmApproachGoal extends Goal {
         double lateralProjection = lateralDelta.x() * left.x() + lateralDelta.z() * left.z();
         int side = lateralProjection >= 0.0 ? 1 : -1;
         return new SwarmObstacleAvoidancePolicy.Avoidance(choice.waypoint(), true, side);
+    }
+
+    private boolean canUseSpiderClimbLane(ServerLevel level,
+            double x, double z, double targetY) {
+        if (!(mob instanceof Spider)
+                || !(mob.getNavigation() instanceof WallClimberNavigation)
+                || !SwarmConfig.SPIDER_TERRAIN_ADAPTATION_ENABLED.get()
+                || !Double.isFinite(targetY)
+                || targetY < mob.getY() - 0.5) {
+            return false;
+        }
+
+        BlockPos base = BlockPos.containing(x, mob.getY(), z);
+        if (!level.isInWorldBounds(base) || !level.hasChunkAt(base)) return false;
+
+        int wallHeight = 0;
+        for (int offset = 0;
+                offset <= SwarmSpiderTerrainPolicy.MAX_CLIMB_WALL_HEIGHT;
+                offset++) {
+            BlockPos wallPos = base.above(offset);
+            if (!level.isInWorldBounds(wallPos) || !level.hasChunkAt(wallPos)) {
+                return false;
+            }
+            if (level.getBlockState(wallPos)
+                    .getCollisionShape(level, wallPos).isEmpty()) {
+                break;
+            }
+            wallHeight++;
+        }
+
+        int landingY = base.getY() + wallHeight;
+        boolean headroomClear = wallHeight >= SwarmSpiderTerrainPolicy.MIN_CLIMB_WALL_HEIGHT
+                && wallHeight <= SwarmSpiderTerrainPolicy.MAX_CLIMB_WALL_HEIGHT;
+        for (int offset = 0; headroomClear && offset < 2; offset++) {
+            BlockPos clearance = new BlockPos(base.getX(), landingY + offset, base.getZ());
+            headroomClear = level.isInWorldBounds(clearance)
+                    && level.hasChunkAt(clearance)
+                    && level.getBlockState(clearance)
+                            .getCollisionShape(level, clearance).isEmpty()
+                    && level.getFluidState(clearance).isEmpty();
+        }
+
+        return SwarmSpiderTerrainPolicy.preferNativeClimb(
+                true, true, true, wallHeight, headroomClear, targetY - mob.getY());
     }
 
     /**

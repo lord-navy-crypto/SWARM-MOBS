@@ -27,6 +27,23 @@ class SwarmAdaptiveTacticsPolicyTest {
         assertEquals(1.6,frame.leadBlocks(),1e-9);
     }
 
+    @Test void fastMovingObservedPlayerTriggersBoundedIntercept() {
+        var frame = SwarmAdaptiveTacticsPolicy.choose(
+                sighting(100, 0.65, 0), 100, 1.0, GROUP, true);
+        assertEquals(Pattern.INTERCEPT, frame.pattern());
+        assertEquals(1.0, frame.forward().x(), 1e-9);
+        assertEquals(3.0, frame.leadBlocks(), 1e-9);
+        Vec2 base = new Vec2(0, 0);
+        Vec2 spider = SwarmAdaptiveTacticsPolicy.refineDestination(
+                frame, base, SwarmRole.FLANK_LEFT, SwarmAgentArchetype.FLANKER);
+        Vec2 zombie = SwarmAdaptiveTacticsPolicy.refineDestination(
+                frame, base, SwarmRole.CHASER, SwarmAgentArchetype.ASSAULT);
+        assertEquals(3.0, spider.x(), 1e-9);
+        assertEquals(0.975, zombie.x(), 1e-9);
+        assertEquals(base, SwarmAdaptiveTacticsPolicy.refineDestination(
+                frame, base, SwarmRole.CHASER, SwarmAgentArchetype.RANGED_SUPPORT));
+    }
+
     @Test void stationaryTargetUsesActualLocalSquadApproachAxis() {
         var frame = SwarmAdaptiveTacticsPolicy.choose(
                 sighting(100,0,0),100,1.0,GROUP,true);

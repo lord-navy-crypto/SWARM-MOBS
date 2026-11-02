@@ -19,6 +19,9 @@ active AI may bias bounded high-level task demand but does not directly control
 per-tick movement, attacks, paths, or block coordinates.
 '''
 
+[[mixins]]
+config="swarmmobs.mixins.json"
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"

@@ -52,6 +52,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.DoubleValue NAV_RECOVERY_LATERAL_DISTANCE;
     public static final ModConfigSpec.IntValue NAV_RECOVERY_DURATION_TICKS;
     public static final ModConfigSpec.BooleanValue NAV_OBSTACLE_AVOIDANCE_ENABLED;
+    public static final ModConfigSpec.BooleanValue SPIDER_TERRAIN_ADAPTATION_ENABLED;
     public static final ModConfigSpec.DoubleValue NAV_OBSTACLE_LOOKAHEAD;
     public static final ModConfigSpec.DoubleValue NAV_OBSTACLE_LATERAL_DISTANCE;
     public static final ModConfigSpec.IntValue NAV_OBSTACLE_HOLD_TICKS;
@@ -100,6 +101,17 @@ public final class SwarmConfig {
     public static final ModConfigSpec.BooleanValue BEE_FLOWER_RECRUITMENT_ENABLED;
     public static final ModConfigSpec.BooleanValue BEE_CONNECTED_HIVE_GROWTH_ENABLED;
     public static final ModConfigSpec.BooleanValue BEE_COLONY_SHELTER_ENABLED;
+    public static final ModConfigSpec.IntValue BEE_HIVE_MAX_EXTENSIONS;
+    public static final ModConfigSpec.IntValue BEE_HIVE_WAX_COST;
+    public static final ModConfigSpec.IntValue BEE_HIVE_HONEY_RESERVE;
+    public static final ModConfigSpec.IntValue BEE_HIVE_GROWTH_COOLDOWN_TICKS;
+    public static final ModConfigSpec.IntValue BEE_HIVE_CAPACITY;
+    public static final ModConfigSpec.BooleanValue BEE_COLONY_REPRODUCTION_ENABLED;
+    public static final ModConfigSpec.BooleanValue BEE_HONEY_BONUS_ENABLED;
+    public static final ModConfigSpec.IntValue BEE_COLONY_MAX_POPULATION;
+    public static final ModConfigSpec.IntValue BEE_REPRODUCTION_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue BEE_AGE_SPEED_MULTIPLIER;
+    public static final ModConfigSpec.IntValue BEE_HONEY_PRODUCTION_MULTIPLIER;
     public static final ModConfigSpec.IntValue NEST_MAX_POPULATION;
     public static final ModConfigSpec.BooleanValue NEST_ADAPTIVE_RECRUITMENT;
     public static final ModConfigSpec.DoubleValue NEST_WORKER_TARGET_SHARE;
@@ -276,6 +288,10 @@ public final class SwarmConfig {
         NAV_OBSTACLE_AVOIDANCE_ENABLED = BUILDER
                 .comment("Enable short-range terrain probing before issuing swarm navigation destinations.")
                 .define("navObstacleAvoidanceEnabled", true);
+
+        SPIDER_TERRAIN_ADAPTATION_ENABLED = BUILDER
+                .comment("Let vanilla Spider WallClimberNavigation handle safe 2-5 block vertical faces instead of forcing a horizontal detour. Requires local landing headroom; OFF restores generic obstacle detours.")
+                .define("spiderTerrainAdaptationEnabled", true);
 
         NAV_OBSTACLE_LOOKAHEAD = BUILDER
                 .comment("Forward probe and temporary detour distance, in blocks, for local obstacle avoidance.")
@@ -457,8 +473,52 @@ public final class SwarmConfig {
                 .define("nestConnectedCoreGrowthEnabled", false);
 
         BEE_CONNECTED_HIVE_GROWTH_ENABLED = BUILDER
-                .comment("EXPERIMENTAL: expand vanilla bee nests or beehives into adjacent air when full of bees and full of honey. Consumes the parent's honey level; OFF by default.")
+                .comment("EXPERIMENTAL: expand face-connected vanilla bee nests/beehives. Requires full connected housing, honey above a winter reserve and dropped vanilla honeycomb as wax. Native hive occupancy is never modified. OFF by default.")
                 .define("beeConnectedHiveGrowthEnabled", false);
+
+        BEE_HIVE_MAX_EXTENSIONS = BUILDER
+                .comment("Maximum additional vanilla hive blocks in one connected bee colony; scans fail closed above this bounded limit.")
+                .defineInRange("beeHiveMaxExtensions", 8, 1, 32);
+
+        BEE_HIVE_WAX_COST = BUILDER
+                .comment("Vanilla honeycomb item count consumed per successful hive extension. Honeycomb must be dropped within eight blocks of a member hive.")
+                .defineInRange("beeHiveWaxCost", 2, 1, 16);
+
+        BEE_HIVE_HONEY_RESERVE = BUILDER
+                .comment("Honey levels reserved per hive for colony survival. Expansion spends one level only from a hive above this reserve.")
+                .defineInRange("beeHiveHoneyReserve", 3, 0, 5);
+
+        BEE_HIVE_GROWTH_COOLDOWN_TICKS = BUILDER
+                .comment("Minimum ticks between successful physical hive extensions for one connected bee colony.")
+                .defineInRange("beeHiveGrowthCooldownTicks", 2400, 400, 24000);
+
+        BEE_HIVE_CAPACITY = BUILDER
+                .comment("Configured occupants per vanilla bee nest or beehive. The runtime mixin applies this limit to vanilla hive entry.")
+                .defineInRange("beeHiveCapacity", 8, 3, 16);
+
+        BEE_COLONY_REPRODUCTION_ENABLED = BUILDER
+                .comment("Allow loaded, observed vanilla bee colonies to recruit a baby Bee when flower and honey reserves are sufficient.")
+                .define("beeColonyReproductionEnabled", defaultColonyExperimentsEnabled());
+
+        BEE_HONEY_BONUS_ENABLED = BUILDER
+                .comment("Add bounded bonus honey production when a nectar-carrying Bee returns to its loaded hive; scales with stored workers.")
+                .define("beeHoneyBonusEnabled", defaultColonyExperimentsEnabled());
+
+        BEE_COLONY_MAX_POPULATION = BUILDER
+                .comment("Maximum combined stored and loaded living Bees in one connected vanilla hive colony.")
+                .defineInRange("beeColonyMaxPopulation", 48, 3, 128);
+
+        BEE_REPRODUCTION_INTERVAL_TICKS = BUILDER
+                .comment("Minimum ticks between colony-born baby Bees. Lower values recruit workers faster.")
+                .defineInRange("beeReproductionIntervalTicks", 3600, 600, 24000);
+
+        BEE_AGE_SPEED_MULTIPLIER = BUILDER
+                .comment("Multiplier for vanilla Bee baby maturation and post-breeding cooldown countdown.")
+                .defineInRange("beeAgeSpeedMultiplier", 2, 1, 8);
+
+        BEE_HONEY_PRODUCTION_MULTIPLIER = BUILDER
+                .comment("Multiplier for bounded bonus honey production. The rate also scales with the number of Bees stored in the hive.")
+                .defineInRange("beeHoneyProductionMultiplier", 2, 1, 5);
 
         BEE_COLONY_SHELTER_ENABLED = BUILDER
                 .comment("EXPERIMENTAL: locally warn unladen vanilla Bees about visible hostile mobs near their own hive and let a deterministic subset return home. Does not assign attack targets; OFF by default.")
