@@ -84,6 +84,24 @@ class SwarmAdaptiveTacticsPolicyTest {
                 frame,base,SwarmRole.REAR_PRESSURE,SwarmAgentArchetype.ASSAULT));
     }
 
+    @Test void homogeneousZombieFlanksUseDistinctBoundedSideLanesDuringSurround() {
+        var frame = new SwarmAdaptiveTacticsPolicy.Frame(
+                Pattern.SURROUND, new Vec2(0, 1), 0);
+        Vec2 base = new Vec2(0, 0);
+        Vec2 left = SwarmAdaptiveTacticsPolicy.refineDestination(
+                frame, base, SwarmRole.FLANK_LEFT, SwarmAgentArchetype.ASSAULT);
+        Vec2 right = SwarmAdaptiveTacticsPolicy.refineDestination(
+                frame, base, SwarmRole.FLANK_RIGHT, SwarmAgentArchetype.ASSAULT);
+        assertEquals(new Vec2(-1.25, 0), left);
+        assertEquals(new Vec2(1.25, 0), right);
+        assertEquals(1.25, Math.abs(left.x()), 1.0e-9);
+        assertEquals(1.25, Math.abs(right.x()), 1.0e-9);
+        assertEquals(base, SwarmAdaptiveTacticsPolicy.refineDestination(
+                frame, base, SwarmRole.FLANK_LEFT, SwarmAgentArchetype.RANGED_SUPPORT));
+        assertEquals(base, SwarmAdaptiveTacticsPolicy.refineDestination(
+                frame, base, SwarmRole.FLANK_RIGHT, SwarmAgentArchetype.BREACHER));
+    }
+
     @Test void realSurroundPlacesOnlyRearPressureZombieOnFarSideOfStationaryTarget() {
         var frame = SwarmAdaptiveTacticsPolicy.choose(
                 sighting(100,0,0),100,1.0,GROUP,true);

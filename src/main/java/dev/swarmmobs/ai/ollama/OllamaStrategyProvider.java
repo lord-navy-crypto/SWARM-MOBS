@@ -24,6 +24,8 @@ public final class OllamaStrategyProvider implements SwarmStrategyProvider {
             Choose one coarse swarm strategy and bounded multipliers for the existing deterministic controller.
             Prefer BASELINE when telemetry does not justify a change.
             Reason only from the supplied aggregate telemetry.
+            Optional playerCombatStyle fields are decayed, coarse category shares from successful hits against this mod's mobs; treat them as noisy and do not infer exact items, locations or intentions.
+            Use player-style data only to justify bounded high-level formation/spacing recommendations. Never produce exact coordinates, per-mob commands, attack instructions or changes to vanilla damage/combat handoffs.
             Keep rationale short and technical.
             """;
 

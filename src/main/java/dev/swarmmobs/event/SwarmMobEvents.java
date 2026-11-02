@@ -54,6 +54,8 @@ import dev.swarmmobs.algorithm.TargetRelayPolicy;
 import dev.swarmmobs.ai.SwarmAiActiveState;
 import dev.swarmmobs.ai.SwarmAiControlPolicy;
 import dev.swarmmobs.ai.SwarmAiRoleBiasPolicy;
+import dev.swarmmobs.ai.SwarmPlayerStyleRegistry;
+import dev.swarmmobs.ai.SwarmPlayerStylePolicy;
 import dev.swarmmobs.ai.SwarmAiTaskDemandPolicy;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.data.SwarmAttachments;
@@ -363,6 +365,18 @@ public final class SwarmMobEvents {
         double aiSearchRadiusMultiplier = activeStrategy == null
                 ? 1.0
                 : activeStrategy.searchRadiusMultiplier();
+
+        // Learn only from successful player hits already observed against this
+        // mod's supported mobs. Apply the profile only while that same player
+        // is directly selected; no hidden target location is consulted.
+        var learnedPlayerStyle = SwarmPlayerStylePolicy.choose(
+                !selection.direct() || selection.player() == null ? null
+                        : SwarmPlayerStyleRegistry.snapshot(
+                                level, selection.player().getUUID(), gameTick),
+                SwarmConfig.PLAYER_LEARNING_ENABLED.get());
+        aiFormationMultiplier *= learnedPlayerStyle.formationRadiusMultiplier();
+        aiSeparationMultiplier *= learnedPlayerStyle.separationMultiplier();
+        aiCohesionMultiplier *= learnedPlayerStyle.cohesionMultiplier();
 
         boolean searchMode = !selection.direct()
                 && confidence < SwarmConfig.SEARCH_CONFIDENCE_THRESHOLD.get();

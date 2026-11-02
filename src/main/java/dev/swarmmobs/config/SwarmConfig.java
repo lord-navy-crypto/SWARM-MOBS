@@ -132,6 +132,13 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue OLLAMA_TIMEOUT_MS;
     public static final ModConfigSpec.ConfigValue<String> OLLAMA_KEEP_ALIVE;
 
+    public static final ModConfigSpec.BooleanValue NATURAL_SPAWN_WEIGHTS_ENABLED;
+    public static final ModConfigSpec.DoubleValue ZOMBIE_NATURAL_SPAWN_WEIGHT;
+    public static final ModConfigSpec.DoubleValue SKELETON_NATURAL_SPAWN_WEIGHT;
+    public static final ModConfigSpec.DoubleValue CREEPER_NATURAL_SPAWN_WEIGHT;
+    public static final ModConfigSpec.DoubleValue SPIDER_NATURAL_SPAWN_WEIGHT;
+    public static final ModConfigSpec.BooleanValue PLAYER_LEARNING_ENABLED;
+
     public static final ModConfigSpec SPEC;
 
     static {
@@ -591,6 +598,38 @@ public final class SwarmConfig {
         OLLAMA_KEEP_ALIVE = BUILDER
                 .comment("Ollama keep_alive value used for shadow strategy requests.")
                 .define("ollamaKeepAlive", "5m");
+
+        BUILDER.pop();
+
+        BUILDER.push("naturalSpawnWeights");
+
+        NATURAL_SPAWN_WEIGHTS_ENABLED = BUILDER
+                .comment("Enable live relative-weight adjustments for natural biome monster spawns. Vanilla spawn weights are preserved at multiplier 1.0.")
+                .define("enabled", true);
+
+        ZOMBIE_NATURAL_SPAWN_WEIGHT = BUILDER
+                .comment("Relative natural-spawn weight multiplier for Zombies. 0 disables this natural candidate; 1 preserves vanilla; values above 1 increase relative selection weight.")
+                .defineInRange("zombieMultiplier", 1.0, 0.0, 4.0);
+
+        SKELETON_NATURAL_SPAWN_WEIGHT = BUILDER
+                .comment("Relative natural-spawn weight multiplier for Skeletons. 0 disables this natural candidate; 1 preserves vanilla; values above 1 increase relative selection weight.")
+                .defineInRange("skeletonMultiplier", 1.0, 0.0, 4.0);
+
+        CREEPER_NATURAL_SPAWN_WEIGHT = BUILDER
+                .comment("Relative natural-spawn weight multiplier for Creepers. 0 disables this natural candidate; 1 preserves vanilla; values above 1 increase relative selection weight.")
+                .defineInRange("creeperMultiplier", 1.0, 0.0, 4.0);
+
+        SPIDER_NATURAL_SPAWN_WEIGHT = BUILDER
+                .comment("Relative natural-spawn weight multiplier for Spiders. 0 disables this natural candidate; 1 preserves vanilla; values above 1 increase relative selection weight.")
+                .defineInRange("spiderMultiplier", 1.0, 0.0, 4.0);
+
+        BUILDER.pop();
+
+        BUILDER.push("playerLearning");
+
+        PLAYER_LEARNING_ENABLED = BUILDER
+                .comment("Opt in to session-local, decaying aggregate player combat-style learning. Only broad successful damage categories against supported swarm mobs are counted; no raw history or external upload is stored.")
+                .define("enabled", false);
 
         BUILDER.pop();
 

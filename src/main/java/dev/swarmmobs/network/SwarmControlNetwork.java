@@ -15,6 +15,7 @@ import net.minecraft.world.entity.EntityType;
 import java.util.EnumMap;
 import dev.swarmmobs.ai.SwarmAiShadowService;
 import dev.swarmmobs.ai.SwarmAiShadowState;
+import dev.swarmmobs.ai.SwarmPlayerStyleRegistry;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.colony.SwarmNestScienceTelemetry;
 import dev.swarmmobs.experiment.SwarmExperimentManager;
@@ -76,9 +77,14 @@ public final class SwarmControlNetwork {
 
         // Absolute setters make Save idempotent even after reopening or packet retries.
         if (payload.action().startsWith("set:")) {
-            if (!applyAbsoluteAction(payload.action().substring(4), payload.value())) {
+            String absoluteAction = payload.action().substring(4);
+            if (!applyAbsoluteAction(absoluteAction, payload.value())) {
                 sendSnapshot(player);
                 return;
+            }
+            if ("player_learning_toggle".equals(absoluteAction)
+                    && payload.value() < 0.5) {
+                SwarmPlayerStyleRegistry.clearAll();
             }
             SwarmExperimentManager.markCustom();
         } else {
@@ -103,6 +109,12 @@ public final class SwarmControlNetwork {
             case "toggle_master" -> { SwarmConfig.ENABLED.set(value >= 0.5); return true; }
             case "ai_toggle" -> { SwarmConfig.EXTERNAL_AI_ENABLED.set(value >= 0.5); if (value < 0.5) SwarmAiActiveState.clear(); return true; }
             case "ai_active_toggle" -> { SwarmConfig.EXTERNAL_AI_ACTIVE_ENABLED.set(value >= 0.5); if (value < 0.5) SwarmAiActiveState.clear(); return true; }
+            case "spawn_weights_toggle" -> { SwarmConfig.NATURAL_SPAWN_WEIGHTS_ENABLED.set(value >= 0.5); return true; }
+            case "spawn_zombie_weight" -> { SwarmConfig.ZOMBIE_NATURAL_SPAWN_WEIGHT.set(Math.max(0.0, Math.min(4.0, value))); return true; }
+            case "spawn_skeleton_weight" -> { SwarmConfig.SKELETON_NATURAL_SPAWN_WEIGHT.set(Math.max(0.0, Math.min(4.0, value))); return true; }
+            case "spawn_creeper_weight" -> { SwarmConfig.CREEPER_NATURAL_SPAWN_WEIGHT.set(Math.max(0.0, Math.min(4.0, value))); return true; }
+            case "spawn_spider_weight" -> { SwarmConfig.SPIDER_NATURAL_SPAWN_WEIGHT.set(Math.max(0.0, Math.min(4.0, value))); return true; }
+            case "player_learning_toggle" -> { SwarmConfig.PLAYER_LEARNING_ENABLED.set(value >= 0.5); return true; }
             case "toggle_engineering" -> { SwarmConfig.ZOMBIE_ENGINEERING_ENABLED.set(value >= 0.5); return true; }
             case "engineering_hardness_delta" -> { SwarmConfig.ZOMBIE_ENGINEERING_MAX_BREAK_HARDNESS.set(Math.max(0.0, Math.min(10.0, value))); return true; }
             case "engineering_carry_delta" -> { SwarmConfig.ZOMBIE_ENGINEERING_MAX_CARRIED_BLOCKS.set((int) Math.round(Math.max(0, Math.min(16, value)))); return true; }
@@ -243,6 +255,9 @@ public final class SwarmControlNetwork {
             case "ai_refresh" -> {
                 // Snapshot is returned by the normal server-authoritative refresh below.
             }
+
+            case "player_learning_reset" ->
+                    SwarmPlayerStyleRegistry.clearAll();
 
             case "preset_baseline" -> SwarmExperimentManager.apply(SwarmExperimentPreset.BASELINE);
             case "preset_noisy_sensing" -> SwarmExperimentManager.apply(SwarmExperimentPreset.NOISY_SENSING);
@@ -723,6 +738,7 @@ public final class SwarmControlNetwork {
         var ai = SwarmAiShadowState.snapshot();
         var decision = ai.lastDecision();
         var activeAi = SwarmAiActiveState.snapshot(level.getGameTime());
+        var playerLearning = SwarmPlayerStyleRegistry.summary(level, level.getGameTime());
         boolean masterEnabled = SwarmConfig.ENABLED.get();
         boolean exposeDynamicAssignments =
                 SwarmControlEffectiveStatePolicy.exposeDynamicAssignments(
@@ -888,6 +904,21 @@ public final class SwarmControlNetwork {
                 pair("aiSearchRadiusMultiplier", decision.searchRadiusMultiplier()),
                 pair("aiRationale", decision.rationale()),
                 pair("aiLastError", ai.lastError()),
+                pair("spawnWeightsEnabled", SwarmConfig.NATURAL_SPAWN_WEIGHTS_ENABLED.get()),
+                pair("spawnZombieWeight", SwarmConfig.ZOMBIE_NATURAL_SPAWN_WEIGHT.get()),
+                pair("spawnSkeletonWeight", SwarmConfig.SKELETON_NATURAL_SPAWN_WEIGHT.get()),
+                pair("spawnCreeperWeight", SwarmConfig.CREEPER_NATURAL_SPAWN_WEIGHT.get()),
+                pair("spawnSpiderWeight", SwarmConfig.SPIDER_NATURAL_SPAWN_WEIGHT.get()),
+                pair("playerLearningEnabled", SwarmConfig.PLAYER_LEARNING_ENABLED.get()),
+                pair("learningProfiles", playerLearning.profiles()),
+                pair("learningSamples", playerLearning.samples()),
+                pair("learningDominantStyle", playerLearning.dominantStyle().name()),
+                pair("learningMeleeShare", playerLearning.meleeShare()),
+                pair("learningProjectileShare", playerLearning.projectileShare()),
+                pair("learningExplosiveShare", playerLearning.explosiveShare()),
+                pair("learningFireShare", playerLearning.fireShare()),
+                pair("learningMagicShare", playerLearning.magicShare()),
+                pair("learningOtherShare", playerLearning.otherShare()),
                 pair("master", masterEnabled),
                 pair("liveAgents", zombies + skeletons + spiders + creepers),
                 pair("staleRouteResets", Math.min(Integer.MAX_VALUE, staleRouteResets)),
