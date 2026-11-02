@@ -3,6 +3,7 @@ package dev.swarmmobs.gametest;
 import com.mojang.authlib.GameProfile;
 import io.netty.channel.embedded.EmbeddedChannel;
 import java.util.UUID;
+import java.util.List;
 import dev.swarmmobs.SwarmMobs;
 import dev.swarmmobs.agent.SwarmAgentState;
 import dev.swarmmobs.agent.SwarmBehaviorMode;
@@ -17,6 +18,7 @@ import dev.swarmmobs.algorithm.SwarmCombatPlanner.Vec2;
 import dev.swarmmobs.algorithm.SwarmNavigationCommandTelemetry;
 import dev.swarmmobs.data.SwarmAttachments;
 import dev.swarmmobs.config.SwarmConfig;
+import dev.swarmmobs.event.SwarmSpawnEvents;
 import dev.swarmmobs.goal.SwarmApproachGoal;
 import dev.swarmmobs.goal.SwarmIdleNestGoal;
 import dev.swarmmobs.goal.SwarmZombieColonyHaulGoal;
@@ -45,12 +47,15 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.projectile.AbstractArrow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.biome.MobSpawnSettings;
+import net.minecraft.util.random.WeightedRandomList;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SweetBerryBushBlock;
@@ -63,6 +68,7 @@ import net.minecraft.world.entity.monster.Spider;
 import net.minecraft.world.entity.animal.Pig;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import net.neoforged.neoforge.network.registration.NetworkRegistry;
+import net.neoforged.neoforge.event.level.LevelEvent;
 
 public final class SwarmRuntimeGameTests {
     private static final String TEMPLATE = "empty5x4x5";
@@ -6043,6 +6049,124 @@ public final class SwarmRuntimeGameTests {
             helper.succeed();
         } finally {
             SwarmConfig.NEST_ADAPTIVE_STOCK_ENABLED.set(previous);
+        }
+    }
+
+
+    @PrefixGameTestTemplate(false)
+    @GameTest(batch = "swarm_runtime_spawn_weight_controls",
+            templateNamespace = SwarmMobs.MOD_ID, template = TEMPLATE, timeoutTicks = 40)
+    public static void naturalSpawnWeightsPreserveVanillaAndScaleOnlySelectedCandidates(
+            GameTestHelper helper) {
+        boolean oldEnabled = SwarmConfig.NATURAL_SPAWN_WEIGHTS_ENABLED.get();
+        double oldZombie = SwarmConfig.ZOMBIE_NATURAL_SPAWN_WEIGHT.get();
+        double oldSkeleton = SwarmConfig.SKELETON_NATURAL_SPAWN_WEIGHT.get();
+        double oldCreeper = SwarmConfig.CREEPER_NATURAL_SPAWN_WEIGHT.get();
+        double oldSpider = SwarmConfig.SPIDER_NATURAL_SPAWN_WEIGHT.get();
+        try {
+            List<MobSpawnSettings.SpawnerData> originals = List.of(
+                    new MobSpawnSettings.SpawnerData(EntityType.ZOMBIE, 100, 1, 4),
+                    new MobSpawnSettings.SpawnerData(EntityType.SKELETON, 80, 2, 3),
+                    new MobSpawnSettings.SpawnerData(EntityType.CREEPER, 50, 1, 2),
+                    new MobSpawnSettings.SpawnerData(EntityType.SPIDER, 40, 2, 5),
+                    new MobSpawnSettings.SpawnerData(EntityType.ENDERMAN, 10, 1, 1)
+            );
+            BlockPos spawnPos = helper.absolutePos(new BlockPos(2, 1, 2));
+
+            // Baseline: multiplier 1.0 is exactly vanilla.
+            SwarmConfig.NATURAL_SPAWN_WEIGHTS_ENABLED.set(true);
+            SwarmConfig.ZOMBIE_NATURAL_SPAWN_WEIGHT.set(1.0);
+            SwarmConfig.SKELETON_NATURAL_SPAWN_WEIGHT.set(1.0);
+            SwarmConfig.CREEPER_NATURAL_SPAWN_WEIGHT.set(1.0);
+            SwarmConfig.SPIDER_NATURAL_SPAWN_WEIGHT.set(1.0);
+            var vanillaEvent = new LevelEvent.PotentialSpawns(
+                    helper.getLevel(), MobCategory.MONSTER, spawnPos,
+                    WeightedRandomList.create(originals));
+            SwarmSpawnEvents.onPotentialSpawns(vanillaEvent);
+            if (vanillaEvent.getSpawnerDataList().size() != originals.size()) {
+                helper.fail("Vanilla multiplier changed the natural-spawn candidate count");
+                return;
+            }
+            for (MobSpawnSettings.SpawnerData original : originals) {
+                var actual = vanillaEvent.getSpawnerDataList().stream()
+                        .filter(entry -> entry.type == original.type)
+                        .findFirst().orElse(null);
+                if (actual == null
+                        || actual.getWeight().asInt() != original.getWeight().asInt()
+                        || actual.minCount != original.minCount
+                        || actual.maxCount != original.maxCount) {
+                    helper.fail("Vanilla multiplier changed candidate data for " + original.type);
+                    return;
+                }
+            }
+
+            // Disabled: non-vanilla values must not alter the candidate list.
+            SwarmConfig.NATURAL_SPAWN_WEIGHTS_ENABLED.set(false);
+            SwarmConfig.ZOMBIE_NATURAL_SPAWN_WEIGHT.set(0.0);
+            SwarmConfig.SKELETON_NATURAL_SPAWN_WEIGHT.set(2.0);
+            var disabledEvent = new LevelEvent.PotentialSpawns(
+                    helper.getLevel(), MobCategory.MONSTER, spawnPos,
+                    WeightedRandomList.create(originals));
+            SwarmSpawnEvents.onPotentialSpawns(disabledEvent);
+            if (disabledEvent.getSpawnerDataList().size() != originals.size()
+                    || disabledEvent.getSpawnerDataList().stream()
+                            .filter(entry -> entry.type == EntityType.ZOMBIE
+                                    && entry.getWeight().asInt() == 100)
+                            .count() != 1
+                    || disabledEvent.getSpawnerDataList().stream()
+                            .filter(entry -> entry.type == EntityType.SKELETON
+                                    && entry.getWeight().asInt() == 80)
+                            .count() != 1) {
+                helper.fail("Disabled spawn controls still modified natural candidates");
+                return;
+            }
+
+            // Enabled: only the four configured candidates change; pack sizes and
+            // every unrelated biome entry remain intact.
+            SwarmConfig.NATURAL_SPAWN_WEIGHTS_ENABLED.set(true);
+            SwarmConfig.ZOMBIE_NATURAL_SPAWN_WEIGHT.set(0.0);
+            SwarmConfig.SKELETON_NATURAL_SPAWN_WEIGHT.set(1.5);
+            SwarmConfig.CREEPER_NATURAL_SPAWN_WEIGHT.set(1.0);
+            SwarmConfig.SPIDER_NATURAL_SPAWN_WEIGHT.set(2.0);
+            var adjustedEvent = new LevelEvent.PotentialSpawns(
+                    helper.getLevel(), MobCategory.MONSTER, spawnPos,
+                    WeightedRandomList.create(originals));
+            SwarmSpawnEvents.onPotentialSpawns(adjustedEvent);
+
+            var adjusted = adjustedEvent.getSpawnerDataList();
+            var skeleton = adjusted.stream()
+                    .filter(entry -> entry.type == EntityType.SKELETON)
+                    .findFirst().orElse(null);
+            var creeper = adjusted.stream()
+                    .filter(entry -> entry.type == EntityType.CREEPER)
+                    .findFirst().orElse(null);
+            var spider = adjusted.stream()
+                    .filter(entry -> entry.type == EntityType.SPIDER)
+                    .findFirst().orElse(null);
+            var enderman = adjusted.stream()
+                    .filter(entry -> entry.type == EntityType.ENDERMAN)
+                    .findFirst().orElse(null);
+
+            if (adjusted.size() != 4
+                    || adjusted.stream().anyMatch(entry -> entry.type == EntityType.ZOMBIE)
+                    || skeleton == null || skeleton.getWeight().asInt() != 120
+                    || skeleton.minCount != 2 || skeleton.maxCount != 3
+                    || creeper == null || creeper.getWeight().asInt() != 50
+                    || creeper.minCount != 1 || creeper.maxCount != 2
+                    || spider == null || spider.getWeight().asInt() != 80
+                    || spider.minCount != 2 || spider.maxCount != 5
+                    || enderman == null || enderman.getWeight().asInt() != 10
+                    || enderman.minCount != 1 || enderman.maxCount != 1) {
+                helper.fail("Spawn weights did not preserve unrelated entries and original pack sizes");
+                return;
+            }
+            helper.succeed();
+        } finally {
+            SwarmConfig.NATURAL_SPAWN_WEIGHTS_ENABLED.set(oldEnabled);
+            SwarmConfig.ZOMBIE_NATURAL_SPAWN_WEIGHT.set(oldZombie);
+            SwarmConfig.SKELETON_NATURAL_SPAWN_WEIGHT.set(oldSkeleton);
+            SwarmConfig.CREEPER_NATURAL_SPAWN_WEIGHT.set(oldCreeper);
+            SwarmConfig.SPIDER_NATURAL_SPAWN_WEIGHT.set(oldSpider);
         }
     }
 
