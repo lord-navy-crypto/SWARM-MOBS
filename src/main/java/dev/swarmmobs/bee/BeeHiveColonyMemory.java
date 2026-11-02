@@ -9,21 +9,19 @@ import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
 /** Bounded transient cache and overflow-slot reservations for vanilla hive colonies. */
 public final class BeeHiveColonyMemory {
     public static final int MAX_CACHED_HIVES = 1024;
-    public static final int MAX_RESERVATIONS = 4096;
+    public static final int MAX_RESERVATIONS = BeeHiveSlotReservations.MAX_RESERVATIONS;
     public static final long SNAPSHOT_TTL_TICKS = 20L;
-    public static final long RESERVATION_TTL_TICKS = 600L;
+    public static final long RESERVATION_TTL_TICKS = BeeHiveSlotReservations.RESERVATION_TTL_TICKS;
 
     private record Cached(BeeHiveColonySnapshot.Snapshot snapshot, long observedAt, int maxHives) {}
-    private record Reservation(long targetHive, long expiresAt) {}
-
     private final LinkedHashMap<Long, Cached> snapshots = new LinkedHashMap<>(16, 0.75f, true);
-    private final LinkedHashMap<UUID, Reservation> reservations = new LinkedHashMap<>(16, 0.75f, true);
+    private final BeeHiveSlotReservations reservations = new BeeHiveSlotReservations();
 
     public BeeHiveColonySnapshot.Snapshot snapshot(ServerLevel level, BlockPos home,
             long now, int maxHives) {
         if (level == null || home == null || now < 0)
             throw new IllegalArgumentException("invalid hive snapshot request");
-        pruneReservations(now);
+        reservations.reservationCount(now);
         Cached cached = snapshots.get(home.asLong());
         if (cached != null && cached.maxHives() == maxHives && now >= cached.observedAt()
                 && now - cached.observedAt() < SNAPSHOT_TTL_TICKS) return cached.snapshot();
@@ -41,54 +39,30 @@ public final class BeeHiveColonyMemory {
     }
 
     public boolean reserve(UUID beeId, BlockPos targetHive, int storedOccupants, long now) {
-        if (beeId == null || targetHive == null || storedOccupants < 0 || now < 0)
-            throw new IllegalArgumentException("invalid hive reservation");
-        pruneReservations(now);
-        Reservation old = reservations.get(beeId);
-        if (old != null && old.targetHive() == targetHive.asLong()) return true;
-        reservations.remove(beeId);
-        if (storedOccupants + reservedSlots(targetHive.asLong(), now)
-                >= BeehiveBlockEntity.MAX_OCCUPANTS) return false;
-        reservations.put(beeId, new Reservation(targetHive.asLong(),
-                Math.addExact(now, RESERVATION_TTL_TICKS)));
-        while (reservations.size() > MAX_RESERVATIONS)
-            reservations.remove(reservations.keySet().iterator().next());
-        return true;
+        if (targetHive == null) throw new IllegalArgumentException("targetHive");
+        return reservations.reserve(beeId, targetHive.asLong(), storedOccupants, now,
+                BeehiveBlockEntity.MAX_OCCUPANTS);
     }
 
     public int reservedSlots(long hivePosition, long now) {
-        pruneReservations(now);
-        int count = 0;
-        for (Reservation reservation : reservations.values())
-            if (reservation.targetHive() == hivePosition) count++;
-        return count;
+        return reservations.reservedSlots(hivePosition, now);
     }
 
     public boolean hasReservation(UUID beeId, long now) {
-        pruneReservations(now);
-        return beeId != null && reservations.containsKey(beeId);
+        return reservations.hasReservation(beeId, now);
     }
 
     public void reconcile(UUID beeId, BlockPos currentHive, long now) {
-        if (beeId == null) return;
-        pruneReservations(now);
-        Reservation reservation = reservations.get(beeId);
-        if (reservation != null && (currentHive == null
-                || reservation.targetHive() != currentHive.asLong())) reservations.remove(beeId);
+        reservations.reconcile(beeId, currentHive == null ? null : currentHive.asLong(), now);
     }
 
     public void release(UUID beeId) {
-        if (beeId != null) reservations.remove(beeId);
+        reservations.release(beeId);
     }
 
     public int cachedHiveCount() { return snapshots.size(); }
     public int reservationCount(long now) {
-        pruneReservations(now);
-        return reservations.size();
-    }
-
-    private void pruneReservations(long now) {
-        reservations.entrySet().removeIf(entry -> now >= entry.getValue().expiresAt());
+        return reservations.reservationCount(now);
     }
 
     private void trimSnapshots() {

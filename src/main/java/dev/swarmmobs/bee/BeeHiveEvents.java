@@ -66,6 +66,7 @@ public final class BeeHiveEvents {
         BeeHiveColonyMemory hiveMemory = BeeColonyRuntime.hives(level);
         BeeHiveColonySnapshot.Snapshot colony = hiveMemory.snapshot(level, home, now, maxExtensions + 1);
         if (!colony.complete() || colony.overflow() || colony.hives().isEmpty()) return false;
+        List<Long> colonyKeys = colony.positions().stream().map(BlockPos::asLong).toList();
 
         boolean observed = colony.positions().stream().anyMatch(position ->
                 level.players().stream().anyMatch(player -> !player.isSpectator()
@@ -80,8 +81,7 @@ public final class BeeHiveEvents {
             }
         }
 
-        if (!BeeColonyRuntime.growth(level).claimColony(colony.positions(), now,
-                SwarmConfig.BEE_HIVE_GROWTH_COOLDOWN_TICKS.get())) return false;
+        BeeHiveGrowthMemory growthMemory = BeeColonyRuntime.growth(level);
 
         int freeSites = countAvailableSites(level, colony);
         int wax = BeeWaxStockpile.count(level, colony.positions(), WAX_RADIUS);
@@ -98,6 +98,10 @@ public final class BeeHiveEvents {
                 SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get(), true);
         if (BeeColonyRuntime.tasks(level).assign(bee.getUUID(), needs, now)
                 != BeeTaskPolicy.Task.BUILD) return false;
+        // Claim only after selecting a real BUILD worker; FORAGE/REST workers
+        // must not suppress another worker's same-tick construction attempt.
+        if (!growthMemory.claimColony(colonyKeys, now,
+                SwarmConfig.BEE_HIVE_GROWTH_COOLDOWN_TICKS.get())) return false;
 
         List<Candidate> candidates = findCandidates(level, colony);
         if (candidates.isEmpty()) return false;
@@ -132,7 +136,7 @@ public final class BeeHiveEvents {
                 return false;
             }
 
-            BeeColonyRuntime.growth(level).recordExpansion(colony.positions(), now);
+            growthMemory.recordExpansion(colonyKeys, now);
             hiveMemory.invalidate(colony);
             bee.setHivePos(site);
             bee.setSavedFlowerPos(null);
