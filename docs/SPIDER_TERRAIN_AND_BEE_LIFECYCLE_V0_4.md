@@ -57,7 +57,7 @@ Therefore:
 - Flower choice and task reassessment remain on the existing 100-tick cadence.
 - Hive growth retains its existing 400-tick cadence and nearby-player guard.
 - No global world scans, forced chunk loads, chunk tickets, or persistent per-bee NBT.
-- Spider wall sensing checks only one local column, at most six block positions, and only when the front probe is blocked.
+- Spider wall sensing checks one local column (up to six wall blocks plus two landing-clearance blocks) and only when the front probe is blocked.
 - No changes to damage, attack targeting, projectile behavior, Creeper fuse behavior, or vanilla Bee sting behavior.
 
 ## Research sources
