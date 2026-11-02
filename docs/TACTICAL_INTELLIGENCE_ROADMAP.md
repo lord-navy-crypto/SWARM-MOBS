@@ -39,3 +39,14 @@ These systems are local and observation-bound. No global squad commander or hidd
 - Add deterministic unit tests for policy boundaries and mixed compositions.
 - Add Minecraft GameTests for target loss/reacquisition, changing group size, mixed-species formations, and config isolation.
 - Tune difficulty through bounded perception, coordination delay, and tactical complexity rather than unfair omniscience or inflated damage.
+
+## Phase 9 — Adaptive player modeling and spawn composition
+
+- Add an opt-in online opponent profile based only on successful, directly attributable game events.
+- Use decaying aggregate categories and confidence thresholds; do not store raw replay logs or hidden player coordinates.
+- Let the deterministic controller adjust only bounded formation geometry in response to a stable observed player pattern.
+- Expose per-species natural spawn-weight multipliers in the Command Center while preserving vanilla mob caps and group sizes.
+- Improve homogeneous Zombie left/right slot distinction so a single-species squad does not require Spider presence to produce varied movement.
+- Add outcome telemetry (survival, accepted path progress, target reacquisition) before attempting rule-weight learning.
+
+The first increment is documented in docs/ADAPTIVE_PLAYER_MODEL_AND_SPAWN_CONTROL.md and tracked by issue #89. This is a game-AI adaptation layer, not real-world tactical doctrine or a replacement for the deterministic controller.

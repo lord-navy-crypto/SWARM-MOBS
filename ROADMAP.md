@@ -385,3 +385,23 @@ Runtime integration:
 - active Ollama strategy may bias task demand (for example ENCIRCLE raises FLANK demand), but it still cannot choose a specific agent or exact coordinate.
 
 This layer is intentionally decentralized and reproducible: no random per-tick role lottery and no LLM per-agent commands.
+
+## v0.14 — adaptive player modeling and natural spawn control (IN PROGRESS)
+
+Tracking issue: https://github.com/lord-navy-crypto/SWARM-MOBS/issues/89
+
+Initial implementation slice:
+- server-authoritative Command Center multipliers for Zombie, Skeleton, Creeper and Spider natural spawn weights;
+- runtime candidate-list scaling through NeoForge LevelEvent.PotentialSpawns, preserving pack sizes and the vanilla mob cap;
+- opt-in, session-local, decaying player combat-style category counts;
+- bounded deterministic formation/spacing adaptation after a minimum sample threshold;
+- aggregate-only player-style context for optional local Ollama shadow requests;
+- stronger left/right waypoint separation for homogeneous Zombie groups during SURROUND.
+
+Not included:
+- no extra spawn scheduler or guaranteed mobs-per-minute;
+- no spawn-egg, spawner, command, conversion or reinforcement changes;
+- no neural-network training on the server thread;
+- no exact per-mob LLM instructions, hidden target tracking or damage buffs.
+
+Research and implementation notes: docs/ADAPTIVE_PLAYER_MODEL_AND_SPAWN_CONTROL.md

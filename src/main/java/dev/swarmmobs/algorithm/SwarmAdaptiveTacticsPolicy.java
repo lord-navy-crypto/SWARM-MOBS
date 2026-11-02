@@ -70,9 +70,28 @@ public final class SwarmAdaptiveTacticsPolicy {
     /** Move only confirmed flank-position waypoints; never modify combat targets. */
     public static Vec2 refineDestination(Frame frame, Vec2 original,
             SwarmRole role, SwarmAgentArchetype archetype) {
-        if (frame == null || !finite(original) || frame.pattern() != Pattern.SWEEP
-                || (role != SwarmRole.FLANK_LEFT && role != SwarmRole.FLANK_RIGHT)
-                || !finite(frame.forward())
+        if (frame == null || !finite(original) || !finite(frame.forward())
+                || archetype == null
+                || (role != SwarmRole.FLANK_LEFT && role != SwarmRole.FLANK_RIGHT)) {
+            return original;
+        }
+
+        // Homogeneous Zombie groups also need visibly distinct side lanes:
+        // they cannot rely on a Spider archetype being present to create a
+        // surround pattern. The offset is a bounded Minecraft waypoint only.
+        if (frame.pattern() == Pattern.SURROUND
+                && (archetype == SwarmAgentArchetype.ASSAULT
+                    || archetype == SwarmAgentArchetype.FLANKER)) {
+            double length = frame.forward().length();
+            if (!Double.isFinite(length) || length < 1.0e-6) return original;
+            Vec2 forward = frame.forward().scale(1.0 / length);
+            Vec2 lateral = new Vec2(-forward.z(), forward.x());
+            double offset = archetype == SwarmAgentArchetype.FLANKER ? 2.0 : 1.25;
+            double side = role == SwarmRole.FLANK_LEFT ? -1.0 : 1.0;
+            return original.add(lateral.scale(offset * side));
+        }
+
+        if (frame.pattern() != Pattern.SWEEP
                 || !Double.isFinite(frame.leadBlocks())
                 || frame.leadBlocks() <= 0.0) {
             return original;

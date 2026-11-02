@@ -37,6 +37,8 @@ public final class SwarmClothControlScreen {
 
         buildOverview(builder.getOrCreateCategory(Component.literal("Overview")), entries, values);
         buildAi(builder.getOrCreateCategory(Component.literal("AI")), entries, values);
+        buildSpawnControl(builder.getOrCreateCategory(Component.literal("Spawn Control")), entries, values);
+        buildPlayerLearning(builder.getOrCreateCategory(Component.literal("Player Learning")), entries, values);
         buildEngineering(builder.getOrCreateCategory(Component.literal("Engineering")), entries, values);
         buildCoordination(builder.getOrCreateCategory(Component.literal("Coordination & Labor")), entries, values);
         buildSensing(builder.getOrCreateCategory(Component.literal("Sensing & Communication")), entries, values);
@@ -220,6 +222,69 @@ public final class SwarmClothControlScreen {
             status(category, entries, "Last error: " + abbreviate(error, 180));
         }
 
+    }
+
+    private static void buildSpawnControl(
+            ConfigCategory category,
+            ConfigEntryBuilder entries,
+            Map<String, String> values
+    ) {
+        status(category, entries,
+                "These are relative natural biome-spawn weights, not guaranteed mobs per minute. 1.00 preserves vanilla; 0 removes that species from the natural candidate list; values above 1 increase its selection weight. Vanilla mob caps and pack sizes remain unchanged.");
+        toggle(category, entries, values,
+                "Enable natural spawn weight controls",
+                "spawnWeightsEnabled",
+                "spawn_weights_toggle",
+                true,
+                "Apply the four relative multipliers to natural monster spawn selection only. Spawner blocks, eggs, commands and conversions are unaffected.");
+
+        doubleField(category, entries, values,
+                "Zombie spawn weight multiplier", "spawnZombieWeight",
+                "spawn_zombie_weight", 1.0,
+                "0.00–4.00. 1.00 is vanilla; 2.00 doubles this entry's relative weight against other natural monster candidates.");
+        doubleField(category, entries, values,
+                "Skeleton spawn weight multiplier", "spawnSkeletonWeight",
+                "spawn_skeleton_weight", 1.0,
+                "0.00–4.00. 1.00 is vanilla; 2.00 doubles this entry's relative weight against other natural monster candidates.");
+        doubleField(category, entries, values,
+                "Creeper spawn weight multiplier", "spawnCreeperWeight",
+                "spawn_creeper_weight", 1.0,
+                "0.00–4.00. 1.00 is vanilla; 2.00 doubles this entry's relative weight against other natural monster candidates.");
+        doubleField(category, entries, values,
+                "Spider spawn weight multiplier", "spawnSpiderWeight",
+                "spawn_spider_weight", 1.0,
+                "0.00–4.00. 1.00 is vanilla; 2.00 doubles this entry's relative weight against other natural monster candidates.");
+    }
+
+    private static void buildPlayerLearning(
+            ConfigCategory category,
+            ConfigEntryBuilder entries,
+            Map<String, String> values
+    ) {
+        status(category, entries,
+                "Session-local online learning. It counts only successful broad damage categories against supported swarm mobs. It does not save raw combat logs, player coordinates, chat or inventory, and it never uploads data.");
+        toggle(category, entries, values,
+                "Learn player combat patterns",
+                "playerLearningEnabled",
+                "player_learning_toggle",
+                false,
+                "Opt in to decaying, bounded player-style profiles. The model needs several observations and a clear dominant pattern before changing formation geometry.");
+        status(category, entries,
+                "Tracked profiles: " + integer(values, "learningProfiles")
+                        + "  |  decayed hit samples: " + integer(values, "learningSamples")
+                        + "  |  dominant pattern: " + text(values, "learningDominantStyle", "UNKNOWN"));
+        status(category, entries,
+                "Melee " + decimal(values, "learningMeleeShare")
+                        + "  |  projectile " + decimal(values, "learningProjectileShare")
+                        + "  |  explosive " + decimal(values, "learningExplosiveShare")
+                        + "  |  fire " + decimal(values, "learningFireShare")
+                        + "  |  magic " + decimal(values, "learningMagicShare"));
+        status(category, entries,
+                "The deterministic response changes only bounded formation radius, spacing and cohesion. Vanilla attacks, damage and combat handoffs remain unchanged. Optional Ollama shadow requests receive aggregate shares only.");
+        action(category, entries,
+                "Reset learned player profiles",
+                "player_learning_reset",
+                "Clear all session-local player-style summaries for this world.");
     }
 
     private static void buildEngineering(

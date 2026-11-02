@@ -1,6 +1,7 @@
 package dev.swarmmobs.ai;
 
 import dev.swarmmobs.config.SwarmConfig;
+import dev.swarmmobs.ai.SwarmPlayerStyleRegistry;
 import dev.swarmmobs.experiment.SwarmExperimentManager;
 import dev.swarmmobs.experiment.SwarmExperimentMetrics;
 import net.minecraft.server.level.ServerLevel;
@@ -9,6 +10,7 @@ public final class SwarmStrategyRequestFactory {
 
     public static SwarmStrategyRequest from(ServerLevel level) {
         var metrics = SwarmExperimentMetrics.snapshot(level);
+        var playerStyle = SwarmPlayerStyleRegistry.summary(level, level.getGameTime());
         return new SwarmStrategyRequest(
                 level.getGameTime(),
                 metrics.agentCount(),
@@ -27,7 +29,15 @@ public final class SwarmStrategyRequestFactory {
                 metrics.roleReassignments(),
                 metrics.activeSearchEpisodes(),
                 metrics.searchSuccessRate(),
-                metrics.averageReacquisitionTicks()
+                metrics.averageReacquisitionTicks(),
+                playerStyle.profiles(),
+                playerStyle.samples(),
+                playerStyle.dominantStyle().name(),
+                playerStyle.meleeShare(),
+                playerStyle.projectileShare(),
+                playerStyle.explosiveShare(),
+                playerStyle.fireShare(),
+                playerStyle.magicShare()
         );
     }
 
