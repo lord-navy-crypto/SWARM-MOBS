@@ -95,4 +95,88 @@ class TargetRelayPolicyTest {
     private static TargetObservation observation(UUID target, long tick, double x) {
         return new TargetObservation(target, tick, x, 64.0, 0.0, 0.0, 1.0);
     }
+
+    @Test
+    void sameTickObservationsAreFusedAndNewestTimestampIsPreserved() {
+        UUID target = UUID.randomUUID();
+        var result = TargetRelayPolicy.fuseFreshest(100, 40, List.of(
+                new TargetObservation(target, 100, 10.0, 64.0, 0.0, 1.0, 0.0, 0.2, 0.0),
+                new TargetObservation(target, 100, 12.0, 64.0, 0.0, 1.0, 0.0, 0.2, 0.0)
+        ), 4, 8.0).orElseThrow();
+
+        assertTrue(result.fused());
+        assertEquals(2, result.contributors());
+        assertEquals(100, result.observation().observationTick());
+        assertEquals(11.0, result.observation().x(), 1.0e-9);
+    }
+
+    @Test
+    void olderObservationsAreShortHorizonAlignedUsingTheirObservedVelocity() {
+        UUID target = UUID.randomUUID();
+        var result = TargetRelayPolicy.fuseFreshest(100, 40, List.of(
+                new TargetObservation(target, 100, 10.0, 64.0, 0.0, 1.0, 0.0, 1.0, 0.0),
+                new TargetObservation(target, 98, 8.0, 64.0, 0.0, 1.0, 0.0, 1.0, 0.0)
+        ), 4, 8.0).orElseThrow();
+
+        assertEquals(2, result.contributors());
+        assertEquals(10.0, result.observation().x(), 1.0e-9);
+        assertEquals(100, result.observation().observationTick());
+    }
+
+    @Test
+    void spatialOutliersAndOtherTargetsAreExcluded() {
+        UUID target = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        var result = TargetRelayPolicy.fuseFreshest(100, 40, List.of(
+                new TargetObservation(target, 100, 10.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+                new TargetObservation(target, 100, 30.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+                new TargetObservation(other, 100, 11.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0)
+        ), 4, 8.0).orElseThrow();
+
+        assertEquals(1, result.contributors());
+        assertSame(result.observation(), result.observation());
+        assertEquals(target, result.observation().targetId());
+        assertEquals(10.0, result.observation().x(), 1.0e-9);
+    }
+
+    @Test
+    void duplicateRelaysDoNotArtificiallyIncreaseContributorCount() {
+        UUID target = UUID.randomUUID();
+        TargetObservation source = new TargetObservation(
+                target, 100, 10.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0);
+        var result = TargetRelayPolicy.fuseFreshest(100, 40,
+                List.of(source, source, source), 4, 8.0).orElseThrow();
+
+        assertFalse(result.fused());
+        assertEquals(1, result.contributors());
+        assertSame(source, result.observation());
+    }
+
+    @Test
+    void fusionWindowAndObservationAgeAreEnforced() {
+        UUID target = UUID.randomUUID();
+        var narrow = TargetRelayPolicy.fuseFreshest(100, 40, List.of(
+                new TargetObservation(target, 100, 10.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+                new TargetObservation(target, 95, 10.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0)
+        ), 2, 8.0).orElseThrow();
+        assertEquals(1, narrow.contributors());
+
+        var expired = TargetRelayPolicy.fuseFreshest(100, 4, List.of(
+                new TargetObservation(target, 100, 10.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0),
+                new TargetObservation(target, 90, 10.0, 64.0, 0.0, 1.0, 0.0, 0.0, 0.0)
+        ), 20, 8.0).orElseThrow();
+        assertEquals(1, expired.contributors());
+    }
+
+    @Test
+    void unknownPositionsCannotParticipateInFusion() {
+        UUID target = UUID.randomUUID();
+        TargetObservation known = observation(target, 100, 10.0);
+        var result = TargetRelayPolicy.fuseFreshest(100, 40, List.of(
+                known, TargetObservation.unknownPosition(target, 100)
+        ), 4, 8.0).orElseThrow();
+
+        assertEquals(1, result.contributors());
+        assertSame(known, result.observation());
+    }
 }
