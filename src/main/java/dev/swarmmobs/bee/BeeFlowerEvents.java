@@ -8,6 +8,7 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.BeehiveBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
@@ -121,22 +122,42 @@ public final class BeeFlowerEvents {
     static BeeTaskPolicy.Needs colonyNeeds(ServerLevel level, BlockPos home,
             double fatigue, boolean guardEnabled, boolean buildEnabled) {
         long now = level.getGameTime();
-        var state = level.getBlockState(home);
-        int honey = state.hasProperty(BeehiveBlock.HONEY_LEVEL)
-                ? state.getValue(BeehiveBlock.HONEY_LEVEL) : 0;
+        var homeState = level.getBlockState(home);
+        int localHoney = homeState.hasProperty(BeehiveBlock.HONEY_LEVEL)
+                ? homeState.getValue(BeehiveBlock.HONEY_LEVEL) : 0;
         int localOccupants = level.getBlockEntity(home) instanceof BeehiveBlockEntity hive
                 ? hive.getOccupantCount() : 0;
+
+        int colonyHoney = localHoney;
+        int honeyCapacity = BeehiveBlock.MAX_HONEY_LEVELS;
         int occupants = localOccupants;
         int capacity = BeehiveBlockEntity.MAX_OCCUPANTS;
-        boolean hasExpansionSite = false;
+        boolean buildReady = false;
 
-        if (buildEnabled) {
+        if (buildEnabled && level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
+            int maxExtensions = SwarmConfig.BEE_HIVE_MAX_EXTENSIONS.get();
             BeeHiveColonySnapshot.Snapshot colony = BeeColonyRuntime.hives(level).snapshot(
-                    level, home, now, SwarmConfig.BEE_HIVE_MAX_EXTENSIONS.get() + 1);
-            if (colony.complete() && !colony.overflow()) {
+                    level, home, now, maxExtensions + 1);
+            if (colony.complete() && !colony.overflow() && !colony.hives().isEmpty()) {
                 occupants = colony.occupants();
                 capacity = colony.capacity();
-                hasExpansionSite = BeeHiveEvents.hasAvailableExpansionSite(level, colony);
+                colonyHoney = colony.storedHoney();
+                honeyCapacity = colony.hives().size() * BeehiveBlock.MAX_HONEY_LEVELS;
+
+                boolean full = occupants >= capacity;
+                boolean underExtensionLimit = colony.extensions() < maxExtensions;
+                if (full && underExtensionLimit
+                        && BeeHiveEvents.hasAvailableExpansionSite(level, colony)) {
+                    int reservePerHive = SwarmConfig.BEE_HIVE_HONEY_RESERVE.get();
+                    int winterReserve = reservePerHive * colony.hives().size();
+                    int wax = BeeWaxStockpile.count(level, colony.positions(),
+                            BeeWaxStockpile.DEFAULT_RADIUS);
+                    BeeHiveGrowthPolicy.State growthState = new BeeHiveGrowthPolicy.State(
+                            occupants, capacity, colonyHoney, winterReserve,
+                            wax, SwarmConfig.BEE_HIVE_WAX_COST.get(),
+                            1, colony.extensions(), maxExtensions);
+                    buildReady = BeeHiveGrowthPolicy.canExpand(growthState);
+                }
             }
         }
 
@@ -144,13 +165,15 @@ public final class BeeFlowerEvents {
                 ? level.getEntitiesOfClass(Monster.class,
                         new AABB(home).inflate(10.0), Monster::isAlive).size()
                 : 0;
-        double nectarShortage = 1.0 - honey / (double) BeehiveBlock.MAX_HONEY_LEVELS;
-        boolean colonyFull = occupants >= capacity;
-        double spaceShortage = buildEnabled && colonyFull && hasExpansionSite ? 1.0 : 0.0;
+        double nectarShortage = 1.0 - Math.min(1.0,
+                colonyHoney / (double) Math.max(1, honeyCapacity));
+        double spaceShortage = buildReady ? 1.0 : 0.0;
         double threat = Math.min(1.0, threats / 3.0);
-        double fatigueNeed = colonyFull ? 0.0 : fatigue;
+        double fatigueNeed = occupants >= capacity ? 0.0 : fatigue;
         // Vanilla exposes no reliable brood sensor, so NURSE is not inferred.
-        return new BeeTaskPolicy.Needs(nectarShortage, 0.0, threat, spaceShortage, fatigueNeed);
+        // BUILD is offered only when the colony can actually pay and place an extension.
+        return new BeeTaskPolicy.Needs(nectarShortage, 0.0, threat,
+                spaceShortage, fatigueNeed);
     }
 
     private static BlockPos choose(BeeFlowerMemory shared, ServerLevel level,

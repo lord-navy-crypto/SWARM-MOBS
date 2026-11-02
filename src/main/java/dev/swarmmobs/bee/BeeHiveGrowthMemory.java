@@ -6,7 +6,8 @@ import java.util.LinkedHashMap;
 /** Deduplicates connected-colony evaluations and rate-limits successful hive growth. */
 public final class BeeHiveGrowthMemory {
     public static final int MAX_TRACKED_HIVES = 1024;
-    public static final long MEMORY_TICKS = 12000L;
+    public static final long EVALUATION_MEMORY_TICKS = 12000L;
+    public static final long EXPANSION_MEMORY_TICKS = 48000L;
     private final LinkedHashMap<Long, Long> lastEvaluationByHive = new LinkedHashMap<>(16, 0.75f, true);
     private final LinkedHashMap<Long, Long> lastExpansionByHive = new LinkedHashMap<>(16, 0.75f, true);
 
@@ -57,9 +58,9 @@ public final class BeeHiveGrowthMemory {
 
     private void prune(long now) {
         lastEvaluationByHive.entrySet().removeIf(e -> now >= e.getValue()
-                && now - e.getValue() >= MEMORY_TICKS);
+                && now - e.getValue() >= EVALUATION_MEMORY_TICKS);
         lastExpansionByHive.entrySet().removeIf(e -> now >= e.getValue()
-                && now - e.getValue() >= MEMORY_TICKS);
+                && now - e.getValue() >= EXPANSION_MEMORY_TICKS);
     }
 
     private static void trim(LinkedHashMap<Long, Long> map) {

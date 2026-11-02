@@ -20,11 +20,18 @@ class BeeHiveGrowthMemoryTest {
         assertFalse(m.claimColony(three,2499,2400));
         assertTrue(m.claimColony(three,2500,2400));
     }
+    @Test void maximumConfiguredCooldownSurvivesEvaluationMemoryExpiry() {
+        var m = new BeeHiveGrowthMemory();
+        m.recordExpansion(TWO, 100);
+        assertFalse(m.claimColony(TWO, 12100, 24000));
+        assertFalse(m.claimColony(TWO, 24099, 24000));
+        assertTrue(m.claimColony(TWO, 24100, 24000));
+    }
     @Test void entriesExpireAndMemoryStaysBounded() {
         var m=new BeeHiveGrowthMemory();
         assertTrue(m.claimColony(TWO,100,2400));
         assertEquals(2,m.size(100));
-        assertEquals(0,m.size(100+BeeHiveGrowthMemory.MEMORY_TICKS));
+        assertEquals(0,m.size(100+BeeHiveGrowthMemory.EVALUATION_MEMORY_TICKS));
         for(int i=0;i<BeeHiveGrowthMemory.MAX_TRACKED_HIVES+10;i++)
             m.claim((long) i, 20000L+i);
         assertTrue(m.size(30000)<=BeeHiveGrowthMemory.MAX_TRACKED_HIVES);

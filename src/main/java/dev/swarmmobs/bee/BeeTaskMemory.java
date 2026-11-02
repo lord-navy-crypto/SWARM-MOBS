@@ -27,7 +27,10 @@ public final class BeeTaskMemory {
                 ? BeeTaskPolicy.Task.FORAGE : old.task();
         // A full hive or completed rest can suppress fatigue to zero. Do not
         // keep a stale REST assignment alive after its need has disappeared.
-        if (previous == BeeTaskPolicy.Task.REST && needs.fatigue() == 0.0) {
+        if ((previous == BeeTaskPolicy.Task.REST && needs.fatigue() == 0.0)
+                || (previous == BeeTaskPolicy.Task.BUILD && needs.spaceShortage() == 0.0)
+                || (previous == BeeTaskPolicy.Task.GUARD && needs.threat() == 0.0)
+                || (previous == BeeTaskPolicy.Task.NURSE && needs.broodDemand() == 0.0)) {
             previous = BeeTaskPolicy.Task.FORAGE;
         }
         BeeTaskPolicy.Task selected = BeeTaskPolicy.select(

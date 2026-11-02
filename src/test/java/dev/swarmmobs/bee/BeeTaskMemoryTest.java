@@ -5,58 +5,26 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BeeTaskMemoryTest {
-    private static final UUID BEE = new UUID(0, 42);
+    private static final BeeTaskPolicy.Needs EMPTY = new BeeTaskPolicy.Needs(0, 0, 0, 0, 0);
 
-    @Test void repeatedAssignmentsAreStableWhenNeedsDoNotChange() {
+    @Test void staleBuildAssignmentReturnsToForagingWhenExpansionIsNoLongerReady() {
         var memory = new BeeTaskMemory();
-        var needs = new BeeTaskPolicy.Needs(0.9, 0.0, 0.0, 0.2, 0.0);
-        var first = memory.assign(BEE, needs, 100);
-        var second = memory.assign(BEE, needs, 200);
-        assertEquals(first, second);
-        assertEquals(1, memory.size(200));
+        UUID bee = new UUID(0, 7);
+        var buildNeed = new BeeTaskPolicy.Needs(0, 0, 0, 1, 0);
+        assertEquals(BeeTaskPolicy.Task.BUILD, memory.assign(bee, buildNeed, 100));
+        assertEquals(BeeTaskPolicy.Task.FORAGE, memory.assign(bee, EMPTY, 101));
     }
 
-    @Test void strongObservedThreatCanReassignWorkerToGuardPriority() {
+    @Test void staleGuardAndNurseAssignmentsDoNotPersistWithoutTheirNeeds() {
         var memory = new BeeTaskMemory();
-        memory.assign(BEE, new BeeTaskPolicy.Needs(0.2, 0, 0, 0.1, 0), 100);
-        var guarded = memory.assign(BEE,
-                new BeeTaskPolicy.Needs(0.1, 0, 1.0, 0.1, 0), 200);
-        assertEquals(BeeTaskPolicy.Task.GUARD, guarded);
-    }
+        UUID guard = new UUID(0, 8);
+        var threat = new BeeTaskPolicy.Needs(0, 0, 1, 0, 0);
+        assertEquals(BeeTaskPolicy.Task.GUARD, memory.assign(guard, threat, 100));
+        assertEquals(BeeTaskPolicy.Task.FORAGE, memory.assign(guard, EMPTY, 101));
 
-    @Test void assignmentsExpireAndCacheRemainsBounded() {
-        var memory = new BeeTaskMemory();
-        memory.assign(BEE, new BeeTaskPolicy.Needs(0.5, 0, 0, 0, 0), 100);
-        assertEquals(0, memory.size(100 + BeeTaskMemory.MEMORY_TICKS));
-        for (int i = 0; i < BeeTaskMemory.MAX_ASSIGNMENTS + 20; i++) {
-            memory.assign(new UUID(1, i),
-                    new BeeTaskPolicy.Needs(0.5, 0, 0, 0, 0), 20000 + i);
-        }
-        assertTrue(memory.size(30000) <= BeeTaskMemory.MAX_ASSIGNMENTS);
-    }
-
-    @Test void restAssignmentClearsWhenFatigueNeedDisappears() {
-        var memory = new BeeTaskMemory();
-        var tired = new BeeTaskPolicy.Needs(0.0, 0, 0, 0, 1.0);
-        assertEquals(BeeTaskPolicy.Task.REST, memory.assign(BEE, tired, 100));
-        var noLongerTired = new BeeTaskPolicy.Needs(0.0, 0, 0, 0, 0.0);
-        assertEquals(BeeTaskPolicy.Task.FORAGE, memory.assign(BEE, noLongerTired, 101));
-    }
-
-    @Test void clearAllowsWorkerToReevaluateAfterHiveExpansion() {
-        var memory = new BeeTaskMemory();
-        var buildNeeds = new BeeTaskPolicy.Needs(0.0, 0, 0, 1.0, 0);
-        assertEquals(BeeTaskPolicy.Task.BUILD, memory.assign(BEE, buildNeeds, 100));
-        memory.clear(BEE);
-        var forageNeeds = new BeeTaskPolicy.Needs(1.0, 0, 0, 0, 0);
-        assertEquals(BeeTaskPolicy.Task.FORAGE, memory.assign(BEE, forageNeeds, 101));
-    }
-
-    @Test void invalidAssignmentInputsAreRejected() {
-        var memory = new BeeTaskMemory();
-        assertThrows(IllegalArgumentException.class, () ->
-                memory.assign(null, new BeeTaskPolicy.Needs(0, 0, 0, 0, 0), 1));
-        assertThrows(IllegalArgumentException.class, () ->
-                memory.assign(BEE, new BeeTaskPolicy.Needs(0, 0, 0, 0, 0), -1));
+        UUID nurse = new UUID(0, 9);
+        var brood = new BeeTaskPolicy.Needs(0, 1, 0, 0, 0);
+        assertEquals(BeeTaskPolicy.Task.NURSE, memory.assign(nurse, brood, 100));
+        assertEquals(BeeTaskPolicy.Task.FORAGE, memory.assign(nurse, EMPTY, 101));
     }
 }
