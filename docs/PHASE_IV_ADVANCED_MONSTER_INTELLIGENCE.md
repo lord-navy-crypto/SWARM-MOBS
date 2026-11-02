@@ -29,3 +29,16 @@ The Player Learning page exposes the learning toggle, aggregate profile summarie
 - Unit tests cover decay, expiry, sample confidence, movement classification, duplicate-sample rejection, and tactical hysteresis.
 - Runtime GameTests continue to verify the existing native combat and movement handoffs.
 - Manual playtesting should compare homogeneous Zombie groups and mixed-species groups against stationary, moving, and direction-changing players.
+
+## Phase IV-B — Collective Observation Fusion
+
+The existing neighbor-to-neighbor message system now fuses fresh, spatially consistent observations before the deterministic planner consumes them.
+
+- The newest actual observation anchors the fused estimate and its timestamp is preserved.
+- Older observations may be projected forward only within a short configurable window, using their own observed horizontal velocity and a three-block correction cap.
+- Duplicate relays are deduplicated; observations for other targets, expired records, vertical outliers, and spatial outliers are excluded.
+- Same-tick observations receive equal weight. Older observations receive lower weight according to their age and existing confidence.
+- Fusion never reads hidden live target state, changes the source observation timestamp, or bypasses vanilla target/attack/navigation ownership.
+- The Communication page exposes the fusion toggle, time window, cumulative fusion count, and current contributor summary.
+
+Default fusion window: 4 ticks. Maximum accepted horizontal disagreement: 8 blocks. Maximum temporal correction: 3 blocks. Fusion is enabled by default and can be disabled independently of message communication.
