@@ -35,6 +35,14 @@ class BeeTaskMemoryTest {
         assertTrue(memory.size(30000) <= BeeTaskMemory.MAX_ASSIGNMENTS);
     }
 
+    @Test void restAssignmentClearsWhenFatigueNeedDisappears() {
+        var memory = new BeeTaskMemory();
+        var tired = new BeeTaskPolicy.Needs(0.0, 0, 0, 0, 1.0);
+        assertEquals(BeeTaskPolicy.Task.REST, memory.assign(BEE, tired, 100));
+        var noLongerTired = new BeeTaskPolicy.Needs(0.0, 0, 0, 0, 0.0);
+        assertEquals(BeeTaskPolicy.Task.FORAGE, memory.assign(BEE, noLongerTired, 101));
+    }
+
     @Test void clearAllowsWorkerToReevaluateAfterHiveExpansion() {
         var memory = new BeeTaskMemory();
         var buildNeeds = new BeeTaskPolicy.Needs(0.0, 0, 0, 1.0, 0);
