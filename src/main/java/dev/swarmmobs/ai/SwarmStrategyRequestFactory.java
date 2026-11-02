@@ -9,8 +9,11 @@ public final class SwarmStrategyRequestFactory {
 
     public static SwarmStrategyRequest from(ServerLevel level) {
         var metrics = SwarmExperimentMetrics.snapshot(level);
+        long now = level.getGameTime();
+        var attackStyle = SwarmPlayerStyleRegistry.summary(level, now);
+        var movementStyle = SwarmPlayerMotionRegistry.summary(level, now);
         return new SwarmStrategyRequest(
-                level.getGameTime(),
+                now,
                 metrics.agentCount(),
                 SwarmExperimentManager.activePreset().name(),
                 metrics.active(),
@@ -27,7 +30,23 @@ public final class SwarmStrategyRequestFactory {
                 metrics.roleReassignments(),
                 metrics.activeSearchEpisodes(),
                 metrics.searchSuccessRate(),
-                metrics.averageReacquisitionTicks()
+                metrics.averageReacquisitionTicks(),
+                attackStyle.profiles(),
+                attackStyle.samples(),
+                attackStyle.dominantStyle().name(),
+                attackStyle.meleeShare(),
+                attackStyle.projectileShare(),
+                attackStyle.explosiveShare(),
+                attackStyle.fireShare(),
+                attackStyle.magicShare(),
+                attackStyle.otherShare(),
+                movementStyle.profiles(),
+                movementStyle.samples(),
+                movementStyle.dominantStyle().name(),
+                movementStyle.stationaryShare(),
+                movementStyle.walkingShare(),
+                movementStyle.sprintingShare(),
+                movementStyle.erraticShare()
         );
     }
 

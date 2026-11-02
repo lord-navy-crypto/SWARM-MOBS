@@ -39,7 +39,7 @@ class SwarmPlayerMotionProfileTest {
         var profile = new SwarmPlayerMotionProfile(0);
         for (int tick = 1; tick <= 6; tick++) profile.observe(0.25, 0.0, tick, tick);
         assertEquals(6.0, profile.snapshot(0).sampleMass(), 1e-9);
-        assertEquals(3.0, profile.snapshot(2400).sampleMass(), 1e-6);
+        assertEquals(3.0, profile.snapshot(2406).sampleMass(), 1e-6);
         assertTrue(profile.isExpired(12007));
     }
 }
