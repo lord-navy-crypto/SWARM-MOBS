@@ -125,10 +125,14 @@ public final class BeeFlowerEvents {
                 ? Math.min(1.0, occupants / (double) BeehiveBlockEntity.MAX_OCCUPANTS)
                 : 0.0;
         double threat = Math.min(1.0, threats / 3.0);
+        // A full hive cannot admit a resting Bee. Let BUILD handle it when a
+        // safe extension site exists; otherwise keep the worker available to forage.
+        double fatigueNeed = occupants >= BeehiveBlockEntity.MAX_OCCUPANTS
+                ? 0.0 : fatigue;
         // Brood demand is deliberately zero: vanilla exposes no reliable brood
         // count or nursing signal, so the model does not infer it from occupancy.
         return new BeeTaskPolicy.Needs(nectarShortage, 0.0, threat,
-                spaceShortage, fatigue);
+                spaceShortage, fatigueNeed);
     }
 
     private static boolean hasAdjacentExpansionSite(ServerLevel level, BlockPos home) {
