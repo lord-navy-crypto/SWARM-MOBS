@@ -416,6 +416,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     public static void tick(Level world, BlockPos pos, BlockState state, SwarmNestBlockEntity core) {
         if (core.connectedExtension || !(world instanceof ServerLevel level)
                 || !SwarmConfig.ENABLED.get()
+                || !SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.get()
                 || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()) return;
 
         // Arithmetic only for 199 out of 200 ticks, distributed by location.
@@ -425,7 +426,9 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     }
 
     public void runColonyCycle(ServerLevel level) {
-        if (connectedExtension || !SwarmConfig.ENABLED.get() || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()
+        if (connectedExtension || !SwarmConfig.ENABLED.get()
+                || !SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.get()
+                || !SwarmConfig.NEST_LIFECYCLE_ENABLED.get()
                 || level.getBlockEntity(worldPosition) != this
                 || !level.getBlockState(worldPosition).is(SwarmNestBlocks.NEST_CORE.get())) {
             return;

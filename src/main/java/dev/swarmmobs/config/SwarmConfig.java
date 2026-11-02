@@ -11,6 +11,11 @@ public final class SwarmConfig {
         return !Boolean.getBoolean("swarmmobs.gametest");
     }
 
+    // Keep the archived Zombie colony system testable in GameTests, but OFF in normal worlds.
+    private static boolean defaultZombieColonyEngineeringEnabled() {
+        return Boolean.getBoolean("swarmmobs.gametest");
+    }
+
 
     public static final ModConfigSpec.BooleanValue ENABLED;
     public static final ModConfigSpec.IntValue PLAN_INTERVAL_TICKS;
@@ -72,6 +77,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue ZOMBIE_ENGINEERING_MAX_BRIDGE_SPAN;
 
     // New idle colony construction is opt-in to protect existing player worlds.
+    public static final ModConfigSpec.BooleanValue ZOMBIE_COLONY_ENGINEERING_ENABLED;
     public static final ModConfigSpec.BooleanValue NEST_CONSTRUCTION_ENABLED;
     public static final ModConfigSpec.BooleanValue NEST_LIFECYCLE_ENABLED;
     public static final ModConfigSpec.BooleanValue NEST_HAULING_ENABLED;
@@ -363,6 +369,10 @@ public final class SwarmConfig {
         // GameTest fixtures opt out via -Dswarmmobs.gametest=true. Operators can
         // opt into all colony experiments in existing worlds via testmode on.
         BUILDER.push("colonies");
+
+        ZOMBIE_COLONY_ENGINEERING_ENABLED = BUILDER
+                .comment("Master switch for the ant/termite-inspired Zombie colony engineering layer: obstacle breaking/bridging, nest founding/lifecycle/expansion, and material harvesting/hauling. OFF by default in normal worlds. Bee hive growth and flower recruitment use independent switches.")
+                .define("zombieColonyEngineeringEnabled", defaultZombieColonyEngineeringEnabled());
 
         NEST_CONSTRUCTION_ENABLED = BUILDER
                 .comment("EXPERIMENTAL: allow idle Zombie workers to place a persistent Nest Core on suitable natural soil; OFF by default to protect player worlds.")

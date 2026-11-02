@@ -119,6 +119,7 @@ public final class SwarmIdleNestGoal extends Goal {
     private boolean baseEligible(ServerLevel level) {
         if (!ColonyPopulationRegistry.canPerformCivilianWork(level, zombie)) return false;
         if (!SwarmConfig.ENABLED.get()
+                || !SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.get()
                 || !SwarmConfig.NEST_CONSTRUCTION_ENABLED.get()
                 || !zombie.isAlive()
                 || zombie.isNoAi()
