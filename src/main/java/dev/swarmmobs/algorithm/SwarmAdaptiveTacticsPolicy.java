@@ -87,7 +87,7 @@ public final class SwarmAdaptiveTacticsPolicy {
             Vec2 forward = frame.forward().scale(1.0 / length);
             Vec2 lateral = new Vec2(-forward.z(), forward.x());
             double offset = archetype == SwarmAgentArchetype.FLANKER ? 2.0 : 1.25;
-            double side = role == SwarmRole.FLANK_LEFT ? -1.0 : 1.0;
+            double side = role == SwarmRole.FLANK_LEFT ? 1.0 : -1.0;
             return original.add(lateral.scale(offset * side));
         }
 
