@@ -19,7 +19,7 @@ public final class SwarmPlayerStyleRegistry {
         PROJECTILE,
         EXPLOSIVE,
         FIRE,
-        MAGIC,
+        OTHER,
         MIXED,
         UNKNOWN
     }
@@ -29,24 +29,24 @@ public final class SwarmPlayerStyleRegistry {
             double projectile,
             double explosive,
             double fire,
-            double magic,
+            double other,
             double sampleMass,
             long lastObservedTick
     ) {
         public double total() {
             return Math.max(0.0, melee) + Math.max(0.0, projectile)
                     + Math.max(0.0, explosive) + Math.max(0.0, fire)
-                    + Math.max(0.0, magic);
+                    + Math.max(0.0, other);
         }
 
         public AttackStyle dominantStyle() {
             if (sampleMass < MIN_CONFIDENT_SAMPLES || total() <= 0.0) {
                 return AttackStyle.UNKNOWN;
             }
-            double[] values = {melee, projectile, explosive, fire, magic};
+            double[] values = {melee, projectile, explosive, fire, other};
             AttackStyle[] styles = {
                     AttackStyle.MELEE, AttackStyle.PROJECTILE,
-                    AttackStyle.EXPLOSIVE, AttackStyle.FIRE, AttackStyle.MAGIC
+                    AttackStyle.EXPLOSIVE, AttackStyle.FIRE, AttackStyle.OTHER
             };
             int best = 0;
             for (int i = 1; i < values.length; i++) {
@@ -64,7 +64,7 @@ public final class SwarmPlayerStyleRegistry {
             double projectileShare,
             double explosiveShare,
             double fireShare,
-            double magicShare,
+            double otherShare,
             AttackStyle dominantStyle
     ) {}
 
@@ -156,7 +156,7 @@ public final class SwarmPlayerStyleRegistry {
             totals[1] += snapshot.projectile();
             totals[2] += snapshot.explosive();
             totals[3] += snapshot.fire();
-            totals[4] += snapshot.magic();
+            totals[4] += snapshot.other();
             sampleMass += snapshot.sampleMass();
         }
         double total = 0.0;
@@ -187,7 +187,7 @@ public final class SwarmPlayerStyleRegistry {
             case PROJECTILE -> 1;
             case EXPLOSIVE -> 2;
             case FIRE -> 3;
-            case MAGIC -> 4;
+            case OTHER -> 4;
             case MIXED, UNKNOWN -> throw new IllegalArgumentException("Non-observation style");
         };
     }

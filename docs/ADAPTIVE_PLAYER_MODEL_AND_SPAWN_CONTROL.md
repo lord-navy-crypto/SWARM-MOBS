@@ -31,7 +31,7 @@ The first model observes only successful damage events where a player damages on
 - projectile
 - explosion
 - fire
-- magic
+- other
 
 The registry stores decaying category counts, not event replays. It is session-local, capped at 64 player profiles, expires inactive profiles after 12,000 ticks, and uses a 2,400-tick half-life. No player name, coordinates, chat, inventory contents, item identifiers or raw event history are stored. Disabling learning clears the current world's profiles; the Command Center also has an explicit reset action.
 

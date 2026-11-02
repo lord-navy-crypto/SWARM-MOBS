@@ -32,9 +32,10 @@ public final class SwarmPlayerStyleEvents {
         if (source.is(DamageTypeTags.IS_FIRE)) {
             return SwarmPlayerStyleRegistry.AttackStyle.FIRE;
         }
-        if (source.is(DamageTypeTags.IS_MAGIC)) {
-            return SwarmPlayerStyleRegistry.AttackStyle.MAGIC;
+        if (source.getDirectEntity() == source.getEntity()) {
+            return SwarmPlayerStyleRegistry.AttackStyle.MELEE;
         }
+        return SwarmPlayerStyleRegistry.AttackStyle.OTHER;
         if (source.is(DamageTypeTags.IS_PROJECTILE)) {
             return SwarmPlayerStyleRegistry.AttackStyle.PROJECTILE;
         }

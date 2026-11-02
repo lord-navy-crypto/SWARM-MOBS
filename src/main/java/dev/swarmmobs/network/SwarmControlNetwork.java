@@ -917,7 +917,7 @@ public final class SwarmControlNetwork {
                 pair("learningProjectileShare", playerLearning.projectileShare()),
                 pair("learningExplosiveShare", playerLearning.explosiveShare()),
                 pair("learningFireShare", playerLearning.fireShare()),
-                pair("learningMagicShare", playerLearning.magicShare()),
+                pair("learningOtherShare", playerLearning.otherShare()),
                 pair("master", masterEnabled),
                 pair("liveAgents", zombies + skeletons + spiders + creepers),
                 pair("staleRouteResets", Math.min(Integer.MAX_VALUE, staleRouteResets)),
