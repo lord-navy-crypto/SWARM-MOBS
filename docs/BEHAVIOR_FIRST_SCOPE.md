@@ -11,10 +11,11 @@ The new SERVER config master switch is `zombieColonyEngineeringEnabled`. It defa
 - Zombie obstacle breaking and bridge placement (`SwarmZombieEngineerGoal`);
 - initial Zombie Nest Core founding (`SwarmIdleNestGoal`);
 - Zombie material mining, crop harvesting, berry foraging, animal hunting, and dropped-item hauling;
-- nest-linked pheromone resource exploration;
+- Spider resource scouting that feeds Zombie nest material/prey jobs;
+- nest-linked pheromone resource exploration (the code remains, but its resource-work runtime is paused);
 - Zombie Nest Core lifecycle, chamber expansion, visible shell repair, connected-core growth, and colony spawning.
 
-The source remains in this working branch for compatibility and future reactivation. The complete pre-pause snapshot is preserved on `archive/zombie-ant-colony-2026-11-02`.
+The source remains in this working branch for compatibility and future reactivation. Existing Nest Core blocks are not deleted; their lifecycle is paused, so they remain inert until the master switch is re-enabled. The complete pre-pause snapshot is preserved on `archive/zombie-ant-colony-2026-11-02`.
 
 ## Systems intentionally retained
 
