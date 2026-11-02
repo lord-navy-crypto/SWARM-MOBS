@@ -1,7 +1,6 @@
 package dev.swarmmobs.ai;
 
 import dev.swarmmobs.config.SwarmConfig;
-import dev.swarmmobs.ai.SwarmPlayerStyleRegistry;
 import dev.swarmmobs.experiment.SwarmExperimentManager;
 import dev.swarmmobs.experiment.SwarmExperimentMetrics;
 import net.minecraft.server.level.ServerLevel;
