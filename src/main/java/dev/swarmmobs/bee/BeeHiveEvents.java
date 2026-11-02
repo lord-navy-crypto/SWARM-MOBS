@@ -25,6 +25,8 @@ import net.neoforged.neoforge.event.tick.EntityTickEvent;
 public final class BeeHiveEvents {
     private static final int GROWTH_INTERVAL_TICKS = 400;
     private static final int SITE_FLOWER_RADIUS = 4;
+    private static final java.util.Map<ServerLevel, BeeHiveGrowthMemory> GROWTH_MEMORY =
+            new java.util.WeakHashMap<>();
     private BeeHiveEvents() {}
 
     private record Candidate(BlockPos position, double score, int order) {}
@@ -60,6 +62,10 @@ public final class BeeHiveEvents {
                         parentState.getValue(BeehiveBlock.HONEY_LEVEL),
                         BeehiveBlock.MAX_HONEY_LEVELS, !hive.isFireNearby(),
                         true)) return;
+
+        BeeHiveGrowthMemory growthMemory = GROWTH_MEMORY.computeIfAbsent(
+                level, unused -> new BeeHiveGrowthMemory());
+        if (!growthMemory.claim(home.asLong(), level.getGameTime())) return;
 
         var kind = natural ? ColonyPhysicalGrowth.Kind.BEE_NEST
                 : ColonyPhysicalGrowth.Kind.BEEHIVE;
