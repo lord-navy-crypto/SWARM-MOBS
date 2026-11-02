@@ -38,6 +38,11 @@ import dev.swarmmobs.algorithm.SwarmSearchRallyPolicy;
 import dev.swarmmobs.algorithm.SwarmSearchTrailField;
 import dev.swarmmobs.algorithm.SwarmSearchCoveragePolicy;
 import dev.swarmmobs.algorithm.SwarmTacticalDoctrinePolicy;
+import dev.swarmmobs.algorithm.SwarmCombinedArmsPolicy;
+import dev.swarmmobs.algorithm.SwarmZombieTacticsPolicy;
+import dev.swarmmobs.algorithm.SwarmSkeletonTacticsPolicy;
+import dev.swarmmobs.algorithm.SwarmCreeperTacticsPolicy;
+import dev.swarmmobs.algorithm.SwarmSpiderTacticsPolicy;
 import dev.swarmmobs.algorithm.SwarmNeighborSelectionPolicy;
 import dev.swarmmobs.algorithm.SwarmSupportSpacingPolicy;
 import dev.swarmmobs.algorithm.SwarmTargetSquadPolicy;
@@ -361,6 +366,12 @@ public final class SwarmMobEvents {
 
         boolean searchMode = !selection.direct()
                 && confidence < SwarmConfig.SEARCH_CONFIDENCE_THRESHOLD.get();
+        boolean creeperFusing = mob instanceof Creeper creeper
+                && (creeper.isIgnited() || creeper.getSwellDir() > 0);
+        boolean directlyVisibleTarget = selection.direct()
+                && selection.player() != null && mob.hasLineOfSight(selection.player());
+        SwarmCombinedArmsPolicy.Plan combinedOperation = SwarmCombinedArmsPolicy.choose(
+                composition, tacticalNeighbors.size() + 1, searchMode, confidence);
         boolean zombieColonyEngineeringEnabled =
                 SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.get();
         SwarmTacticalDoctrinePolicy.Decision tacticalDoctrine =
@@ -517,6 +528,26 @@ public final class SwarmMobEvents {
         state.updateVacantFlankCoverage(
                 coverage.fillingMissingFlank() && tacticalRole == coverage.role());
 
+        List<UUID> sameTargetSkeletonIds = tacticalNeighbors.stream()
+                .filter(Skeleton.class::isInstance)
+                .map(PathfinderMob::getUUID)
+                .toList();
+        SwarmZombieTacticsPolicy.Decision zombieTactics =
+                SwarmZombieTacticsPolicy.choose(tacticalRole, composition,
+                        combinedOperation, searchMode, confidence);
+        SwarmSkeletonTacticsPolicy.Decision skeletonTactics =
+                SwarmSkeletonTacticsPolicy.choose(mob.getUUID(), sameTargetSkeletonIds,
+                        composition, combinedOperation, searchMode, confidence);
+        SwarmSpiderTacticsPolicy.Decision spiderTactics =
+                SwarmSpiderTacticsPolicy.choose(composition, combinedOperation,
+                        searchMode, confidence);
+        SwarmCreeperTacticsPolicy.Decision creeperTactics =
+                SwarmCreeperTacticsPolicy.choose(combinedOperation, searchMode,
+                        directlyVisibleTarget, confidence,
+                        selection.player() == null ? Double.POSITIVE_INFINITY
+                                : Math.sqrt(mob.distanceToSqr(selection.player())),
+                        creeperFusing);
+
         if (searchMode) {
             state.updateRouteSpacingPlan(false, 0);
             state.updateZombieBowLaneYieldPlan(false);
@@ -549,35 +580,6 @@ public final class SwarmMobEvents {
                     SwarmConfig.ALIGNMENT_WEIGHT.get(),
                     SwarmConfig.MAX_STEERING_CORRECTION.get()
             );
-
-            // Search coverage is separate from nest resource pheromones. Mark
-            // a real location only after the agent reaches its previous waypoint.
-            if (SwarmConfig.SEARCH_TRAIL_COVERAGE_ENABLED.get()) {
-                SwarmSearchTrailField field = SEARCH_TRAILS.computeIfAbsent(
-                        level, ignored -> new SwarmSearchTrailField());
-                if (state.hasDestination()
-                        && mob.distanceToSqr(state.destinationX(), mob.getY(),
-                                state.destinationZ()) <= 12.25
-                        && Math.floorMod(gameTick + mob.getId(), 40L) == 0L) {
-                    var visited = mob.blockPosition();
-                    field.mark(observation.targetId(),
-                            new SwarmSearchTrailField.Position(
-                                    visited.getX(), visited.getY(), visited.getZ()),
-                            gameTick);
-                }
-                searchPlan = SwarmSearchCoveragePolicy.adjust(
-                        searchPlan,
-                        new Vec2(observation.x(), observation.z()),
-                        assignedSlot,
-                        candidate -> field.coverage(observation.targetId(),
-                                new SwarmSearchTrailField.Position(
-                                        (int) Math.floor(candidate.x()),
-                                        mob.blockPosition().getY(),
-                                        (int) Math.floor(candidate.z())),
-                                gameTick),
-                        true
-                ).plan();
-            }
 
             // Search coverage is separate from nest resource pheromones. Mark
             // a real location only after the agent reaches its previous waypoint.
@@ -680,8 +682,16 @@ public final class SwarmMobEvents {
             }
             effectiveFormationRadius *= SwarmTacticalDoctrinePolicy
                     .formationRadiusMultiplier(tacticalDoctrine, profile.archetype());
-            effectiveFormationRadius *= SwarmTacticalDoctrinePolicy
-                    .formationRadiusMultiplier(tacticalDoctrine, profile.archetype());
+            switch (profile.archetype()) {
+                case ASSAULT -> effectiveFormationRadius *=
+                        zombieTactics.formationRadiusMultiplier();
+                case RANGED_SUPPORT -> effectiveFormationRadius *=
+                        skeletonTactics.formationRadiusMultiplier();
+                case FLANKER -> effectiveFormationRadius *=
+                        spiderTactics.formationRadiusMultiplier();
+                case BREACHER -> effectiveFormationRadius *=
+                        creeperTactics.formationRadiusMultiplier();
+            }
 
             // Distinct Minecraft squad geometries use only a recent, shared
             // target observation plus physical same-target peers, never a
@@ -693,7 +703,14 @@ public final class SwarmMobEvents {
                             .toList(),
                     SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()
             );
-            state.setTacticalPattern(tacticalFrame.pattern().name());
+            String speciesTactic = switch (profile.archetype()) {
+                case ASSAULT -> zombieTactics.mode().name();
+                case RANGED_SUPPORT -> skeletonTactics.mode().name();
+                case FLANKER -> spiderTactics.mode().name();
+                case BREACHER -> creeperTactics.mode().name();
+            };
+            state.setTacticalPattern(tacticalFrame.pattern().name() + "_"
+                    + combinedOperation.operation().name() + "_" + speciesTactic);
 
             SwarmCombatPlanner.Plan plan = SwarmCombatPlanner.planForRoleWithMotion(
                     tacticalRole,
@@ -719,6 +736,38 @@ public final class SwarmMobEvents {
                     tacticalFrame, plannedDestination,
                     new Vec2(prediction.x(), prediction.z()),
                     effectiveFormationRadius, tacticalRole, profile.archetype());
+
+            if (mob instanceof Spider) {
+                plannedDestination = SwarmSpiderTacticsPolicy.refineDestination(
+                        tacticalFrame, plannedDestination, tacticalRole,
+                        effectiveFormationRadius);
+            }
+            if (mob instanceof Creeper && creeperTactics.mode()
+                    == SwarmCreeperTacticsPolicy.Mode.STAGED_INGRESS
+                    && selection.player() != null) {
+                Vec2 selfPoint = new Vec2(mob.getX(), mob.getZ());
+                Vec2 targetPoint = new Vec2(selection.player().getX(),
+                        selection.player().getZ());
+                List<Vec2> alliedPositionsForEntry = tacticalNeighbors.stream()
+                        .map(peer -> new Vec2(peer.getX(), peer.getZ()))
+                        .toList();
+                Vec2 staging = SwarmCreeperTacticsPolicy.stagingWaypoint(
+                        selfPoint, targetPoint, tacticalFrame.forward(),
+                        alliedPositionsForEntry, assignedSlot);
+                if (staging != null
+                        && SwarmCrowdWaypointWorldPolicy.locallyTraversable(
+                                level, mob.getY(), staging)) {
+                    List<Vec2> activeSkeletonLanes = tacticalNeighbors.stream()
+                            .filter(Skeleton.class::isInstance)
+                            .filter(peer -> peer.hasLineOfSight(selection.player()))
+                            .map(peer -> new Vec2(peer.getX(), peer.getZ()))
+                            .toList();
+                    boolean lanesClear = activeSkeletonLanes.stream().allMatch(shooter ->
+                            SwarmFriendlyFireLanePolicy.isClear(
+                                    shooter, targetPoint, List.of(staging)));
+                    if (lanesClear) plannedDestination = staging;
+                }
+            }
 
             // Crowded assault agents choose a less occupied local game lane
             // instead of all trying to occupy the same waypoint. No extra
@@ -865,7 +914,10 @@ public final class SwarmMobEvents {
                             new Vec2(mob.getX(),mob.getZ()),
                             positiveLane,negativeLane,alliedPositions,
                             SwarmConfig.SEPARATION_RADIUS.get(),mob.getBbWidth(),
-                            state.supportPositionSide(),assignedSlot,
+                            state.supportPositionSide() != 0
+                                    ? state.supportPositionSide()
+                                    : skeletonTactics.preferredLaneSide(),
+                            assignedSlot,
                             positiveClear,negativeClear,
                             positiveFriendlyClear,negativeFriendlyClear);
                     state.acceptSupportPositionDecision(decision);
@@ -875,7 +927,8 @@ public final class SwarmMobEvents {
                 } else if (!SwarmConfig.SUPPORT_POSITION_OPTIMIZATION_ENABLED.get()) {
                     // Explicit OFF means the pre-optimizer legacy behavior.
                     double preferredSign = SwarmFriendlyFireLanePolicy.chooseSide(
-                            assignedSlot,positiveClear,negativeClear,
+                            skeletonTactics.preferredLaneSide() > 0 ? 0 : 1,
+                            positiveClear,negativeClear,
                             positiveFriendlyClear,negativeFriendlyClear);
                     plannedDestination = preferredSign > 0.0
                             ? positiveLane : negativeLane;
@@ -995,8 +1048,6 @@ public final class SwarmMobEvents {
             // This is a short candidate movement, not an attack override.
             boolean speciesRouteSpacing = false;
             int speciesRouteSide = 0;
-            boolean creeperFusing = mob instanceof Creeper creeper
-                    && (creeper.isIgnited() || creeper.getSwellDir() > 0);
             if (selection.direct() && selection.player() != null
                     && squadCombat && confidence >= 0.70
                     && SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()
