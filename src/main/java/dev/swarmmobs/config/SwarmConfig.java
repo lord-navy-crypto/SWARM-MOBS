@@ -106,6 +106,12 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue BEE_HIVE_HONEY_RESERVE;
     public static final ModConfigSpec.IntValue BEE_HIVE_GROWTH_COOLDOWN_TICKS;
     public static final ModConfigSpec.IntValue BEE_HIVE_CAPACITY;
+    public static final ModConfigSpec.BooleanValue BEE_COLONY_REPRODUCTION_ENABLED;
+    public static final ModConfigSpec.BooleanValue BEE_HONEY_BONUS_ENABLED;
+    public static final ModConfigSpec.IntValue BEE_COLONY_MAX_POPULATION;
+    public static final ModConfigSpec.IntValue BEE_REPRODUCTION_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue BEE_AGE_SPEED_MULTIPLIER;
+    public static final ModConfigSpec.IntValue BEE_HONEY_PRODUCTION_MULTIPLIER;
     public static final ModConfigSpec.IntValue NEST_MAX_POPULATION;
     public static final ModConfigSpec.BooleanValue NEST_ADAPTIVE_RECRUITMENT;
     public static final ModConfigSpec.DoubleValue NEST_WORKER_TARGET_SHARE;
@@ -489,6 +495,30 @@ public final class SwarmConfig {
         BEE_HIVE_CAPACITY = BUILDER
                 .comment("Configured occupants per vanilla bee nest or beehive. The runtime mixin applies this limit to vanilla hive entry.")
                 .defineInRange("beeHiveCapacity", 8, 3, 16);
+
+        BEE_COLONY_REPRODUCTION_ENABLED = BUILDER
+                .comment("Allow loaded, observed vanilla bee colonies to recruit a baby Bee when flower and honey reserves are sufficient.")
+                .define("beeColonyReproductionEnabled", defaultColonyExperimentsEnabled());
+
+        BEE_HONEY_BONUS_ENABLED = BUILDER
+                .comment("Add bounded bonus honey production when a nectar-carrying Bee returns to its loaded hive; scales with stored workers.")
+                .define("beeHoneyBonusEnabled", defaultColonyExperimentsEnabled());
+
+        BEE_COLONY_MAX_POPULATION = BUILDER
+                .comment("Maximum combined stored and loaded living Bees in one connected vanilla hive colony.")
+                .defineInRange("beeColonyMaxPopulation", 48, 3, 128);
+
+        BEE_REPRODUCTION_INTERVAL_TICKS = BUILDER
+                .comment("Minimum ticks between colony-born baby Bees. Lower values recruit workers faster.")
+                .defineInRange("beeReproductionIntervalTicks", 3600, 600, 24000);
+
+        BEE_AGE_SPEED_MULTIPLIER = BUILDER
+                .comment("Multiplier for vanilla Bee baby maturation and post-breeding cooldown countdown.")
+                .defineInRange("beeAgeSpeedMultiplier", 2, 1, 8);
+
+        BEE_HONEY_PRODUCTION_MULTIPLIER = BUILDER
+                .comment("Multiplier for bounded bonus honey production. The rate also scales with the number of Bees stored in the hive.")
+                .defineInRange("beeHoneyProductionMultiplier", 2, 1, 5);
 
         BEE_COLONY_SHELTER_ENABLED = BUILDER
                 .comment("EXPERIMENTAL: locally warn unladen vanilla Bees about visible hostile mobs near their own hive and let a deterministic subset return home. Does not assign attack targets; OFF by default.")

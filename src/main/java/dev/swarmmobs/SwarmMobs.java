@@ -3,6 +3,7 @@ package dev.swarmmobs;
 import dev.swarmmobs.bee.BeeHiveEvents;
 import dev.swarmmobs.bee.BeeColonyEvents;
 import dev.swarmmobs.bee.BeeFlowerEvents;
+import dev.swarmmobs.bee.BeeEcologyEvents;
 import dev.swarmmobs.command.SwarmCommands;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.data.SwarmAttachments;
@@ -38,6 +39,7 @@ public final class SwarmMobs {
         NeoForge.EVENT_BUS.addListener(SwarmMobEvents::onEntityTick);
         // Observe completed Bee trips and assign worker priorities before
         // the shelter and hive-growth adapters consume the same tick's state.
+        NeoForge.EVENT_BUS.addListener(BeeEcologyEvents::onEntityTick);
         NeoForge.EVENT_BUS.addListener(BeeFlowerEvents::onEntityTick);
         NeoForge.EVENT_BUS.addListener(BeeColonyEvents::onEntityTick);
         NeoForge.EVENT_BUS.addListener(BeeHiveEvents::onEntityTick);

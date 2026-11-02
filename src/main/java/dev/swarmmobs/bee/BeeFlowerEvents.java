@@ -105,13 +105,27 @@ public final class BeeFlowerEvents {
             return;
         }
 
+        if (task == BeeTaskPolicy.Task.NURSE) {
+            bee.setSavedFlowerPos(null);
+            bee.setStayOutOfHiveCountdown(0);
+            double distanceSquared = bee.distanceToSqr(
+                    activeHome.getX() + 0.5, activeHome.getY() + 0.5,
+                    activeHome.getZ() + 0.5);
+            if (distanceSquared > 2.5 * 2.5
+                    && (bee.getNavigation().isDone()
+                        || Math.floorMod(now + bee.getId(), 20L) == 0L)) {
+                bee.getNavigation().moveTo(activeHome.getX() + 0.5,
+                        activeHome.getY() + 0.5, activeHome.getZ() + 0.5, 0.85);
+            }
+            return;
+        }
+
         // GUARD suppresses new flower recruitment, while BeeColonyEvents
         // independently chooses the sheltering fraction for an active alarm.
         if (task == BeeTaskPolicy.Task.GUARD || savedFlower != null) return;
 
-        // BUILD is executed by BeeHiveEvents when the loaded hive is truly
-        // full and has surplus honey. NURSE remains unassigned because vanilla
-        // BeehiveBlockEntity exposes no brood sensor.
+        // BUILD is executed by BeeHiveEvents when the connected colony can pay
+        // for a physical extension; NURSE workers return to the hive above.
         if (task != BeeTaskPolicy.Task.FORAGE) return;
 
         BlockPos candidate = choose(BeeColonyRuntime.flowers(level), level,
@@ -131,7 +145,7 @@ public final class BeeFlowerEvents {
         int colonyHoney = localHoney;
         int honeyCapacity = BeehiveBlock.MAX_HONEY_LEVELS;
         int occupants = localOccupants;
-        int capacity = BeehiveBlockEntity.MAX_OCCUPANTS;
+        int capacity = SwarmConfig.BEE_HIVE_CAPACITY.get();
         boolean buildReady = false;
 
         if (buildEnabled && level.getGameRules().getBoolean(GameRules.RULE_MOBGRIEFING)) {
@@ -170,9 +184,11 @@ public final class BeeFlowerEvents {
         double spaceShortage = buildReady ? 1.0 : 0.0;
         double threat = Math.min(1.0, threats / 3.0);
         double fatigueNeed = occupants >= capacity ? 0.0 : fatigue;
-        // Vanilla exposes no reliable brood sensor, so NURSE is not inferred.
-        // BUILD is offered only when the colony can actually pay and place an extension.
-        return new BeeTaskPolicy.Needs(nectarShortage, 0.0, threat,
+        int nearbyBrood = level.getEntitiesOfClass(Bee.class,
+                new AABB(home).inflate(12.0),
+                candidate -> candidate.isAlive() && candidate.getAge() < 0).size();
+        double broodDemand = Math.min(1.0, nearbyBrood / 4.0);
+        return new BeeTaskPolicy.Needs(nectarShortage, broodDemand, threat,
                 spaceShortage, fatigueNeed);
     }
 

@@ -1,7 +1,6 @@
 package dev.swarmmobs.bee;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -58,20 +57,6 @@ public final class BeeTaskMemory {
     }
 
     private static BeeTaskPolicy.Worker workerProfile(UUID id) {
-        int hash = id.hashCode();
-        double forage = unit(hash);
-        double nurse = unit(Integer.rotateLeft(hash, 7));
-        double guard = unit(Integer.rotateLeft(hash, 13));
-        double build = unit(Integer.rotateLeft(hash, 21));
-        return new BeeTaskPolicy.Worker(
-                0.55 + 0.45 * forage,
-                0.20 + 0.55 * nurse,
-                0.10 + 0.90 * guard,
-                0.15 + 0.70 * build
-        );
-    }
-
-    private static double unit(int value) {
-        return (Integer.toUnsignedLong(value) & 0xFFFFL) / 65535.0;
+        return BeeCastePolicy.workerProfile(id);
     }
 }
