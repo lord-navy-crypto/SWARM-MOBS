@@ -573,11 +573,11 @@ public final class SwarmConfig {
                 .defineInRange("minHoldTicks", 30, 0, 400);
 
         SPECIALIZATION_EXPERIENCE_GAIN = BUILDER
-                .comment("Experience reinforcement added to the active task on each planning update.")
+                .comment("Experience reinforcement per six game ticks spent on the active task; independent of planner update frequency.")
                 .defineInRange("experienceGain", 0.025, 0.0, 0.25);
 
         SPECIALIZATION_EXPERIENCE_DECAY = BUILDER
-                .comment("Multiplicative experience retention per planning update; values below 1 slowly forget inactive specialization.")
+                .comment("Experience retention per six game ticks; values below 1 slowly forget inactive specialization independent of planner update frequency.")
                 .defineInRange("experienceDecay", 0.995, 0.90, 1.0);
 
         BUILDER.pop();

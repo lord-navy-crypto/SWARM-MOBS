@@ -505,7 +505,8 @@ public final class SwarmMobEvents {
             state.updateTaskExperience(
                     state.currentTask(),
                     SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get(),
-                    SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get()
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get(),
+                    gameTick
             );
 
             candidateRole = SwarmSpecializationRolePolicy.role(

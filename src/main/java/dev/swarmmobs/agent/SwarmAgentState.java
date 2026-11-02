@@ -8,6 +8,7 @@ import dev.swarmmobs.algorithm.SwarmAdaptiveTacticsPolicy;
 import dev.swarmmobs.algorithm.SwarmTacticalHysteresisPolicy;
 import dev.swarmmobs.algorithm.SwarmGameHandoffTimeoutPolicy;
 import dev.swarmmobs.algorithm.SwarmFailedWaypointMemory;
+import dev.swarmmobs.algorithm.SwarmTaskExperiencePolicy;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -160,6 +161,7 @@ public final class SwarmAgentState {
     private long specializationSwitchCount;
     private final EnumMap<SwarmTaskType, Double> taskExperience =
             new EnumMap<>(SwarmTaskType.class);
+    private long lastTaskExperienceUpdateTick = Long.MIN_VALUE;
 
     private final List<TargetMessage> pendingTargetMessages = new ArrayList<>();
     private final LinkedHashMap<MessageSourceTargetKey, Long> latestDeliveredObservationBySource =
@@ -770,15 +772,27 @@ public final class SwarmAgentState {
     public void updateTaskExperience(
             SwarmTaskType activeTask,
             double gain,
-            double decay
+            double decay,
+            long gameTick
     ) {
-        double retention = Math.max(0.0, Math.min(1.0, decay));
+        if (lastTaskExperienceUpdateTick == Long.MIN_VALUE
+                || gameTick < lastTaskExperienceUpdateTick) {
+            lastTaskExperienceUpdateTick = gameTick;
+            return;
+        }
+
+        long elapsedTicks = gameTick - lastTaskExperienceUpdateTick;
+        lastTaskExperienceUpdateTick = gameTick;
+        if (elapsedTicks <= 0L) return;
+
         for (SwarmTaskType task : SwarmTaskType.values()) {
-            double value = taskExperience(task) * retention;
-            if (task == activeTask) {
-                value += Math.max(0.0, gain);
-            }
-            taskExperience.put(task, Math.max(0.0, Math.min(1.0, value)));
+            double taskGain = task == activeTask ? gain : 0.0;
+            taskExperience.put(task, SwarmTaskExperiencePolicy.advance(
+                    taskExperience(task),
+                    taskGain,
+                    decay,
+                    elapsedTicks
+            ));
         }
     }
 

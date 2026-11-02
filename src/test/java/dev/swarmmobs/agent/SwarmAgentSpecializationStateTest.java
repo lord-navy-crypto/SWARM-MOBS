@@ -53,7 +53,7 @@ class SwarmAgentSpecializationStateTest {
                 100L,
                 30
         );
-        state.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.40, 1.0);
+        state.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.40, 1.0, 100L);
 
         state.resetActiveSpecialization();
 
@@ -78,11 +78,12 @@ class SwarmAgentSpecializationStateTest {
     void activeTaskExperienceReinforcesWhileInactiveExperienceDecays() {
         SwarmAgentState state = new SwarmAgentState();
 
-        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 1.0);
-        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 1.0);
+        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 1.0, 100L);
+        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 1.0, 106L);
+        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 1.0, 112L);
         assertEquals(0.40, state.taskExperience(SwarmTaskType.SEARCH), 1e-9);
 
-        state.updateTaskExperience(SwarmTaskType.FLANK, 0.10, 0.5);
+        state.updateTaskExperience(SwarmTaskType.FLANK, 0.10, 0.5, 118L);
 
         assertEquals(0.20, state.taskExperience(SwarmTaskType.SEARCH), 1e-9);
         assertEquals(0.10, state.taskExperience(SwarmTaskType.FLANK), 1e-9);
