@@ -6082,13 +6082,13 @@ public final class SwarmRuntimeGameTests {
                 helper.fail("Vanilla beehive block entity was not created");
                 return;
             }
-            for (int i = 0; i < BeehiveBlockEntity.MAX_OCCUPANTS; i++) {
-                Bee stored = helper.spawn(EntityType.BEE, new BlockPos(1 + i, 1, 1));
+            for (int i = 0; i < SwarmConfig.BEE_HIVE_CAPACITY.get(); i++) {
+                Bee stored = helper.spawn(EntityType.BEE, new BlockPos(1, 1, 1));
                 stored.setNoAi(true);
                 stored.setHivePos(home);
                 hive.addOccupant(stored);
             }
-            if (hive.getOccupantCount() != BeehiveBlockEntity.MAX_OCCUPANTS) {
+            if (hive.getOccupantCount() != SwarmConfig.BEE_HIVE_CAPACITY.get()) {
                 helper.fail("Could not prepare a truly full vanilla hive");
                 return;
             }
@@ -6162,13 +6162,13 @@ public final class SwarmRuntimeGameTests {
                 helper.fail("Connected vanilla hive block entities were not created");
                 return;
             }
-            for (int i = 0; i < BeehiveBlockEntity.MAX_OCCUPANTS; i++) {
-                Bee stored = helper.spawn(EntityType.BEE, new BlockPos(1 + i, 1, 1));
+            for (int i = 0; i < SwarmConfig.BEE_HIVE_CAPACITY.get(); i++) {
+                Bee stored = helper.spawn(EntityType.BEE, new BlockPos(1, 1, 1));
                 stored.setNoAi(true);
                 stored.setHivePos(first);
                 fullHive.addOccupant(stored);
             }
-            if (fullHive.getOccupantCount() != BeehiveBlockEntity.MAX_OCCUPANTS
+            if (fullHive.getOccupantCount() != SwarmConfig.BEE_HIVE_CAPACITY.get()
                     || openHive.getOccupantCount() != 0) {
                 helper.fail("Overflow routing fixture has incorrect native occupancy");
                 return;

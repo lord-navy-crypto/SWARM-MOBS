@@ -12,6 +12,7 @@ import dev.swarmmobs.ai.SwarmAiActiveState;
 import dev.swarmmobs.data.SwarmAttachments;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.animal.Bee;
 import java.util.EnumMap;
 import dev.swarmmobs.ai.SwarmAiShadowService;
 import dev.swarmmobs.ai.SwarmAiShadowState;
@@ -100,6 +101,13 @@ public final class SwarmControlNetwork {
     private static boolean applyAbsoluteAction(String action, double value) {
         if (!Double.isFinite(value)) return false;
         switch (action) {
+            case "bee_reproduction_enabled" -> { SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.set(value >= 0.5); return true; }
+            case "bee_honey_enabled" -> { SwarmConfig.BEE_HONEY_BONUS_ENABLED.set(value >= 0.5); return true; }
+            case "bee_hive_capacity" -> { SwarmConfig.BEE_HIVE_CAPACITY.set((int) Math.round(Math.max(3, Math.min(16, value)))); return true; }
+            case "bee_colony_population" -> { SwarmConfig.BEE_COLONY_MAX_POPULATION.set((int) Math.round(Math.max(3, Math.min(128, value)))); return true; }
+            case "bee_reproduction_interval" -> { SwarmConfig.BEE_REPRODUCTION_INTERVAL_TICKS.set((int) Math.round(Math.max(600, Math.min(24000, value)))); return true; }
+            case "bee_age_speed" -> { SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.set((int) Math.round(Math.max(1, Math.min(8, value)))); return true; }
+            case "bee_honey_multiplier" -> { SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.set((int) Math.round(Math.max(1, Math.min(5, value)))); return true; }
             case "toggle_master" -> { SwarmConfig.ENABLED.set(value >= 0.5); return true; }
             case "ai_toggle" -> { SwarmConfig.EXTERNAL_AI_ENABLED.set(value >= 0.5); if (value < 0.5) SwarmAiActiveState.clear(); return true; }
             case "ai_active_toggle" -> { SwarmConfig.EXTERNAL_AI_ACTIVE_ENABLED.set(value >= 0.5); if (value < 0.5) SwarmAiActiveState.clear(); return true; }
@@ -705,6 +713,39 @@ public final class SwarmControlNetwork {
                 SwarmAiActiveState.clear();
             }
 
+            case "bee_reproduction_toggle" ->
+                    SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.set(!SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.get());
+            case "bee_honey_toggle" ->
+                    SwarmConfig.BEE_HONEY_BONUS_ENABLED.set(!SwarmConfig.BEE_HONEY_BONUS_ENABLED.get());
+            case "bee_growth_toggle" ->
+                    SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.set(!SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.get());
+            case "bee_flower_toggle" ->
+                    SwarmConfig.BEE_FLOWER_RECRUITMENT_ENABLED.set(!SwarmConfig.BEE_FLOWER_RECRUITMENT_ENABLED.get());
+            case "bee_shelter_toggle" ->
+                    SwarmConfig.BEE_COLONY_SHELTER_ENABLED.set(!SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get());
+            case "bee_capacity_delta" -> SwarmConfig.BEE_HIVE_CAPACITY.set((int) clamp(
+                    SwarmConfig.BEE_HIVE_CAPACITY.get() + value, 3, 16));
+            case "bee_population_delta" -> SwarmConfig.BEE_COLONY_MAX_POPULATION.set((int) clamp(
+                    SwarmConfig.BEE_COLONY_MAX_POPULATION.get() + value, 3, 128));
+            case "bee_reproduction_interval_delta" -> SwarmConfig.BEE_REPRODUCTION_INTERVAL_TICKS.set((int) clamp(
+                    SwarmConfig.BEE_REPRODUCTION_INTERVAL_TICKS.get() + value, 600, 24000));
+            case "bee_age_speed_delta" -> SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.set((int) clamp(
+                    SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.get() + value, 1, 8));
+            case "bee_honey_multiplier_delta" -> SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.set((int) clamp(
+                    SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.get() + value, 1, 5));
+            case "bee_baseline" -> {
+                SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.set(true);
+                SwarmConfig.BEE_HONEY_BONUS_ENABLED.set(true);
+                SwarmConfig.BEE_HIVE_CAPACITY.set(8);
+                SwarmConfig.BEE_COLONY_MAX_POPULATION.set(48);
+                SwarmConfig.BEE_REPRODUCTION_INTERVAL_TICKS.set(3600);
+                SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.set(2);
+                SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.set(2);
+                SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.set(true);
+                SwarmConfig.BEE_FLOWER_RECRUITMENT_ENABLED.set(true);
+                SwarmConfig.BEE_COLONY_SHELTER_ENABLED.set(true);
+            }
+
             default -> {
                 // Unknown actions are ignored deliberately.
             }
@@ -741,6 +782,7 @@ public final class SwarmControlNetwork {
         int skeletons = 0;
         int spiders = 0;
         int creepers = 0;
+        int liveBees = 0;
         int tacticalAgentsWithAllies = 0;
         int tacticalPeerLinks = 0;
         int agentsWithTacticalBreacher = 0;
@@ -779,6 +821,7 @@ public final class SwarmControlNetwork {
                 new EnumMap<>(SwarmSpecialization.class);
 
         for (var entity : level.getAllEntities()) {
+            if (entity instanceof Bee) liveBees++;
             if (!(entity instanceof PathfinderMob mob) || !SwarmAgentProfiles.isSupported(mob)) {
                 continue;
             }
@@ -889,6 +932,17 @@ public final class SwarmControlNetwork {
                 pair("aiRationale", decision.rationale()),
                 pair("aiLastError", ai.lastError()),
                 pair("master", masterEnabled),
+                pair("liveBees", liveBees),
+                pair("beeReproductionEnabled", SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.get()),
+                pair("beeHoneyBonusEnabled", SwarmConfig.BEE_HONEY_BONUS_ENABLED.get()),
+                pair("beeHiveCapacity", SwarmConfig.BEE_HIVE_CAPACITY.get()),
+                pair("beeColonyMaxPopulation", SwarmConfig.BEE_COLONY_MAX_POPULATION.get()),
+                pair("beeReproductionInterval", SwarmConfig.BEE_REPRODUCTION_INTERVAL_TICKS.get()),
+                pair("beeAgeSpeed", SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.get()),
+                pair("beeHoneyMultiplier", SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.get()),
+                pair("beeHiveGrowthEnabled", SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.get()),
+                pair("beeFlowerRecruitmentEnabled", SwarmConfig.BEE_FLOWER_RECRUITMENT_ENABLED.get()),
+                pair("beeShelterEnabled", SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get()),
                 pair("liveAgents", zombies + skeletons + spiders + creepers),
                 pair("staleRouteResets", Math.min(Integer.MAX_VALUE, staleRouteResets)),
                 pair("laneBlockedFallbacks", Math.min(Integer.MAX_VALUE, laneBlockedFallbacks)),

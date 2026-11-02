@@ -13,7 +13,7 @@ import java.util.List;
  * existing bounded planner and vanilla attack handoff.
  */
 public final class SwarmAdaptiveTacticsPolicy {
-    public enum Pattern { STANDARD, SWEEP, SURROUND }
+    public enum Pattern { STANDARD, SWEEP, SURROUND, INTERCEPT }
 
     public record Frame(Pattern pattern, Vec2 forward, double leadBlocks) {}
 
@@ -45,6 +45,11 @@ public final class SwarmAdaptiveTacticsPolicy {
             // Bounded lead offsets are spatial waypoints, not new observations.
             return new Frame(Pattern.SWEEP, motion, Math.min(2.0, speed * 8.0));
         }
+        if (observation.hasFiniteVelocity() && speed > 0.48 && speed <= 0.90) {
+            Vec2 motion = new Vec2(observation.velocityX() / speed,
+                    observation.velocityZ() / speed);
+            return new Frame(Pattern.INTERCEPT, motion, Math.min(3.0, speed * 5.0));
+        }
 
         // With a largely stationary observed player and >=3 locally observed
         // same-target members, use the pack's actual approach direction.
@@ -67,26 +72,30 @@ public final class SwarmAdaptiveTacticsPolicy {
         return new Frame(Pattern.SURROUND, approach.scale(1.0 / length), 0.0);
     }
 
-    /** Move only confirmed flank-position waypoints; never modify combat targets. */
+    /** Move only observation-backed role waypoints; never modify combat targets. */
     public static Vec2 refineDestination(Frame frame, Vec2 original,
             SwarmRole role, SwarmAgentArchetype archetype) {
-        if (frame == null || !finite(original) || frame.pattern() != Pattern.SWEEP
-                || (role != SwarmRole.FLANK_LEFT && role != SwarmRole.FLANK_RIGHT)
-                || !finite(frame.forward())
-                || !Double.isFinite(frame.leadBlocks())
-                || frame.leadBlocks() <= 0.0) {
+        if (frame == null || !finite(original)
+                || (frame.pattern() != Pattern.SWEEP && frame.pattern() != Pattern.INTERCEPT)
+                || !finite(frame.forward()) || !Double.isFinite(frame.leadBlocks())
+                || frame.leadBlocks() <= 0.0) return original;
+        boolean intercept = frame.pattern() == Pattern.INTERCEPT;
+        if (!intercept && role != SwarmRole.FLANK_LEFT && role != SwarmRole.FLANK_RIGHT)
             return original;
-        }
-        // The climbing Spider has more lateral freedom than the melee Zombie.
-        // Skeletons keep their verified ranged lane; Creepers keep their
-        // vanilla fuse/handoff corridor.
+        if (intercept && role != SwarmRole.FLANK_LEFT && role != SwarmRole.FLANK_RIGHT
+                && role != SwarmRole.CHASER && role != SwarmRole.REAR_PRESSURE)
+            return original;
+
         double factor = switch (archetype) {
             case FLANKER -> 1.0;
             case ASSAULT -> 0.5;
             default -> 0.0;
         };
+        if (intercept && role == SwarmRole.CHASER) factor *= 0.65;
+        if (intercept && role == SwarmRole.REAR_PRESSURE) factor *= 0.35;
+        double maximumLead = intercept ? 3.0 : 2.0;
         return original.add(frame.forward().scale(
-                Math.min(2.0, frame.leadBlocks()) * factor));
+                Math.min(maximumLead, frame.leadBlocks()) * factor));
     }
 
     /**
