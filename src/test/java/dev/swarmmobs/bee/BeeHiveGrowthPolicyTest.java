@@ -20,6 +20,7 @@ class BeeHiveGrowthPolicyTest {
         assertFalse(BeeHiveGrowthPolicy.canExpand(
                 new BeeHiveGrowthPolicy.State(3, 3, 70, 30, 12, 10, 2, 6, 6)));
     }
+
     @Test void vanillaHiveGrowthRequiresOccupiedHomeAndFullHoney() {
         assertTrue(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 5, 5, true, true));
         assertFalse(BeeHiveGrowthPolicy.canGrowVanilla(2, 3, 5, 5, true, true));
@@ -30,9 +31,19 @@ class BeeHiveGrowthPolicyTest {
 
     @Test void vanillaHiveGrowthDoesNotEnforceLifetimeStructureLimit() {
         for (int oldExtensions : new int[]{0, 8, 1000, 100_000}) {
-            // Vanilla rule intentionally has no total-extension argument.
             assertTrue(BeeHiveGrowthPolicy.canGrowVanilla(3, 3, 5, 5, true, true));
         }
     }
 
+    @Test void expansionSitesPreferFlowersAndLowerThreatAndCrowding() {
+        var rich = new BeeHiveGrowthPolicy.SiteSignals(8, 0, 0);
+        var poor = new BeeHiveGrowthPolicy.SiteSignals(0, 4, 3);
+        assertTrue(BeeHiveGrowthPolicy.expansionSiteScore(rich)
+                > BeeHiveGrowthPolicy.expansionSiteScore(poor));
+    }
+
+    @Test void siteSignalsRejectNegativeCounts() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new BeeHiveGrowthPolicy.SiteSignals(-1, 0, 0));
+    }
 }

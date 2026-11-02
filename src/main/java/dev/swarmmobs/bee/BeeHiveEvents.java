@@ -2,10 +2,15 @@ package dev.swarmmobs.bee;
 
 import dev.swarmmobs.colony.ColonyPhysicalGrowth;
 import dev.swarmmobs.config.SwarmConfig;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.Bee;
+import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.BeehiveBlock;
 import net.minecraft.world.level.block.Blocks;
@@ -19,7 +24,12 @@ import net.neoforged.neoforge.event.tick.EntityTickEvent;
  */
 public final class BeeHiveEvents {
     private static final int GROWTH_INTERVAL_TICKS = 400;
+    private static final int SITE_FLOWER_RADIUS = 4;
+    private static final java.util.Map<ServerLevel, BeeHiveGrowthMemory> GROWTH_MEMORY =
+            new java.util.WeakHashMap<>();
     private BeeHiveEvents() {}
+
+    private record Candidate(BlockPos position, double score, int order) {}
 
     public static void onEntityTick(EntityTickEvent.Post event) {
         if (!(event.getEntity() instanceof Bee bee)
@@ -53,30 +63,86 @@ public final class BeeHiveEvents {
                         BeehiveBlock.MAX_HONEY_LEVELS, !hive.isFireNearby(),
                         true)) return;
 
+        BeeHiveGrowthMemory growthMemory = GROWTH_MEMORY.computeIfAbsent(
+                level, unused -> new BeeHiveGrowthMemory());
+        if (!growthMemory.claim(home.asLong(), level.getGameTime())) return;
+
         var kind = natural ? ColonyPhysicalGrowth.Kind.BEE_NEST
                 : ColonyPhysicalGrowth.Kind.BEEHIVE;
-        // No total hive-count cap. One candidate at most per eligible period.
+        List<Candidate> candidates = new ArrayList<>();
+        int order = 0;
         for (Direction direction : Direction.Plane.HORIZONTAL) {
             BlockPos site = home.relative(direction);
-            if (!level.hasChunkAt(site) || !level.isInWorldBounds(site)
-                    || !level.getBlockState(site).isAir()
-                    || !level.getFluidState(site).isEmpty()
-                    || !level.getEntities((net.minecraft.world.entity.Entity) null,
-                            new AABB(site), e -> e.isAlive()).isEmpty()) continue;
+            if (!isAvailableSite(level, site)) {
+                order++;
+                continue;
+            }
+            int flowers = countNearbyFlowers(level, site);
+            int hives = countNearbyHives(level, site, home);
+            int threats = Math.min(3, level.getEntitiesOfClass(Monster.class,
+                    new AABB(site).inflate(8.0), Monster::isAlive).size());
+            double score = BeeHiveGrowthPolicy.expansionSiteScore(
+                    new BeeHiveGrowthPolicy.SiteSignals(flowers, hives, threats));
+            candidates.add(new Candidate(site, score, order++));
+        }
 
+        candidates.sort(Comparator.comparingDouble(Candidate::score).reversed()
+                .thenComparingInt(Candidate::order));
+        for (Candidate candidate : candidates) {
+            BlockPos site = candidate.position();
             if (!ColonyPhysicalGrowth.placeOne(level, home, site, kind)) continue;
-            // Honey is the prototype construction resource. New hive remains
-            // an ordinary, EMPTY vanilla block entity, not a cloned inventory.
+            // Honey is the construction reserve. The new hive is a normal,
+            // EMPTY vanilla block entity, not a cloned inventory.
             if (!level.setBlock(home,
                     parentState.setValue(BeehiveBlock.HONEY_LEVEL, 0),
                     net.minecraft.world.level.block.Block.UPDATE_ALL)) {
                 level.removeBlock(site, false);
                 return;
             }
-            // Let the external bee discover the new home immediately; stored
-            // bees remain inside the original hive and are not teleported.
+            // Let the external bee discover the new home; stored bees remain
+            // inside the original hive and are not teleported.
             bee.setHivePos(site);
             return;
         }
+    }
+
+    private static boolean isAvailableSite(ServerLevel level, BlockPos site) {
+        return level.hasChunkAt(site) && level.isInWorldBounds(site)
+                && level.getBlockState(site).isAir()
+                && level.getFluidState(site).isEmpty()
+                && level.getEntities((Entity) null, new AABB(site),
+                        entity -> entity.isAlive()).isEmpty();
+    }
+
+    private static int countNearbyFlowers(ServerLevel level, BlockPos center) {
+        int count = 0;
+        for (int dx = -SITE_FLOWER_RADIUS; dx <= SITE_FLOWER_RADIUS; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -SITE_FLOWER_RADIUS; dz <= SITE_FLOWER_RADIUS; dz++) {
+                    BlockPos pos = center.offset(dx, dy, dz);
+                    if (level.hasChunkAt(pos)
+                            && level.getBlockState(pos).is(net.minecraft.tags.BlockTags.FLOWERS)) {
+                        count++;
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
+    private static int countNearbyHives(ServerLevel level, BlockPos center,
+            BlockPos parent) {
+        int count = 0;
+        for (int dx = -4; dx <= 4; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -4; dz <= 4; dz++) {
+                    BlockPos pos = center.offset(dx, dy, dz);
+                    if (pos.equals(parent) || !level.hasChunkAt(pos)) continue;
+                    var state = level.getBlockState(pos);
+                    if (state.is(Blocks.BEE_NEST) || state.is(Blocks.BEEHIVE)) count++;
+                }
+            }
+        }
+        return count;
     }
 }

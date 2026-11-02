@@ -1,29 +1,45 @@
-# Swarm Bees — v0.1 decision core
+# Swarm Bees — coordinated vanilla colony behavior
 
-This branch is intentionally the first non-invasive step toward integrating vanilla Minecraft bees with the existing SWARM-MOBS engine.
+## Runtime behavior
 
-## Implemented
-- Pure Java, deterministic `BeeTaskPolicy` with FORAGE / NURSE / GUARD / BUILD / REST tasks.
-- Local-demand signals and individual response biases.
-- Switching penalty to avoid role thrashing.
-- Pure Java `BeeForagePolicy` for nectar/pollen reward, distance, competition and danger.
-- Time-based confidence decay for remembered flower patches.
-- JUnit policy tests.
+The Bee module integrates with vanilla Minecraft Bees, Bee Nests, and Beehives without replacing their native flight, pollination, anger, breeding, or return-to-hive goals.
 
-## Not implemented yet
-No runtime hook into vanilla `Bee`, bee nest block entities, networking, HUD, population simulation, resource storage, reproduction, or in-game commands. Existing combat AI is untouched.
+### Flower memory and recruitment
 
-## Integration requirements
-1. Inspect the existing entity controllers, sensing/communication APIs, role hysteresis, config, telemetry, and GameTest patterns.
-2. Adapt existing swarm primitives rather than duplicating generic communication and perception.
-3. Add vanilla Bee-specific attachment/state and lifecycle management with server authority.
-4. Define flower-patch observations from loaded chunks only, bounded sensing radius, finite cache size and message expiry.
-5. Make a bee's own forage goal yield to suitable vanilla behaviors (return-to-hive, anger, pollination, breeding) rather than overriding them.
-6. Add GameTests for ordinary pollination, nest return, stinging/anger behavior, persistence, and mob combat regressions.
-7. Benchmark bee counts and prevent chunk-loading side effects.
+- A successful nectar-carrying Bee reports only its actual saved flower position.
+- Memory is hive-scoped, bounded to 16 flowers per hive and 1,024 cached hives, and expires after 2,400 ticks.
+- Repeated successful returns increase observation reliability; stale observations decay.
+- A receiver can learn from its own hive or a directly adjacent vanilla hive only.
+- Candidate patches are ranked using observed utility, freshness, distance, local Bee competition, and nearby hostile-mob pressure.
+- Invalid flowers are forgotten only when their chunks are loaded; unloaded locations are not force-loaded.
+- Vanilla movement remains authoritative. Shared memory only supplies a remembered flower position when the Bee has no current flower assignment.
 
-## Proposed experiment metrics
-Gathered nectar per bee per 1,000 ticks, exploratory trips, failed flower visits, recruitment utility, profession reassignments, path failure ratio, and average tick time.
+### Local task coordination
 
-## Verification
-The GitHub connector saved the files; neither Gradle nor Minecraft GameTests were run in this environment. All behavior tests must be executed before merging.
+`BeeTaskMemory` gives each Bee a deterministic, short-lived task preference with switching hysteresis. It uses only available signals:
+- nectar shortage from the hive honey level;
+- space pressure from observed hive occupancy;
+- local hostile-mob presence.
+
+The runtime does not invent brood or fatigue readings when vanilla exposes no reliable sensor for them. Task preferences influence flower recruitment priority only; they do not replace vanilla Bee goals or falsely claim to implement nursing/guarding animations.
+
+### Connected hive growth
+
+- A full vanilla hive with full honey, calm conditions, an available air site, and mobGriefing enabled may expand.
+- Candidate sites are ranked by nearby flowers, existing hive crowding, and observed hostile-mob pressure.
+- Only loaded blocks are inspected; no chunk tickets are requested.
+- One adjacent vanilla hive is placed per eligible growth interval.
+- The parent honey reserve is consumed; the new hive is an ordinary empty vanilla block entity.
+- There is no artificial lifetime hive-count cap.
+
+## Configuration
+
+Both runtime integrations remain independently opt-in:
+- `beeFlowerRecruitmentEnabled`
+- `beeConnectedHiveGrowthEnabled`
+
+Existing worlds retain their persisted server-config choices. Disabling either switch leaves vanilla Bee behavior untouched.
+
+## Validation
+
+Pure-policy tests cover task hysteresis and expiry, observation reliability and decay, flower ranking inputs, and expansion-site scoring. Runtime CI must additionally validate vanilla Bee return-to-hive, pollination, anger, and hive placement behavior.

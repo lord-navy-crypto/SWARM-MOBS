@@ -18,6 +18,13 @@ public final class BeeHiveGrowthPolicy {
         }
     }
 
+    public record SiteSignals(int nearbyFlowers, int nearbyHives, int nearbyThreats) {
+        public SiteSignals {
+            if (nearbyFlowers < 0 || nearbyHives < 0 || nearbyThreats < 0)
+                throw new IllegalArgumentException("negative site signal");
+        }
+    }
+
     public static boolean canExpand(State s) {
         if (s == null) throw new IllegalArgumentException("state");
         return s.bees() >= s.capacity()
@@ -26,10 +33,20 @@ public final class BeeHiveGrowthPolicy {
                 && s.adjacentFreeSites() > 0
                 && s.extensions() < s.maxExtensions();
     }
+
+    /** Prefer connected-hive sites with nearby forage and lower observed threat/crowding. */
+    public static double expansionSiteScore(SiteSignals signals) {
+        if (signals == null) throw new IllegalArgumentException("signals");
+        double flowers = Math.min(1.0, signals.nearbyFlowers() / 8.0);
+        double hiveCrowding = Math.min(1.0, signals.nearbyHives() / 4.0);
+        double threat = Math.min(1.0, signals.nearbyThreats() / 3.0);
+        return 0.55 * flowers + 0.20 * (1.0 - hiveCrowding)
+                + 0.25 * (1.0 - threat);
+    }
+
     /**
      * Vanilla-only prototype: one hive may build a neighbor when full of
      * occupants and at full honey level. No lifetime extension count cap.
-     * The caller separately checks world permissions and air placement.
      */
     public static boolean canGrowVanilla(int occupants, int hiveCapacity,
                                          int honeyLevel, int fullHoneyLevel,

@@ -47,4 +47,21 @@ class BeeFlowerMemoryTest {
         assertThrows(IllegalArgumentException.class,
                 () -> m.report(0, 0, 1.01, 0));
     }
+
+    @Test void repeatedSuccessfulReturnsIncreasePatchReliability() {
+        var m = new BeeFlowerMemory();
+        m.report(11, 123, .8, 100);
+        double first = m.observations(11, 100).getFirst().confidence();
+        m.report(11, 123, .8, 200);
+        var observation = m.observations(11, 200).getFirst();
+        assertEquals(2, observation.successfulReturns());
+        assertTrue(observation.confidence() > first);
+    }
+
+    @Test void exposesOnlyRecentObservationRecords() {
+        var m = new BeeFlowerMemory();
+        m.report(11, 123, .8, 100);
+        assertEquals(1, m.observations(11, 101).size());
+        assertTrue(m.observations(11, 100 + BeeFlowerMemory.FLOWER_MEMORY_TICKS).isEmpty());
+    }
 }
