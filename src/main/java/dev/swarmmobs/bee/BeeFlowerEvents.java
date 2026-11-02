@@ -39,6 +39,9 @@ public final class BeeFlowerEvents {
 
         BlockPos home = bee.getHivePos();
         if (home == null || !level.hasChunkAt(home) || !isVanillaHive(level, home)) return;
+        if (SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get()
+                && BeeColonyRuntime.alarms(level)
+                        .active(home.asLong(), now, BeeColonyEvents.ALARM_HOLD_TICKS).isPresent()) return;
         if (level.players().stream().noneMatch(player ->
                 !player.isSpectator() && player.distanceToSqr(
                         home.getX() + .5, home.getY() + .5, home.getZ() + .5)
@@ -58,13 +61,14 @@ public final class BeeFlowerEvents {
         }
         if (bee.hasNectar() || observedFlower != null) return;
 
-        BeeTaskPolicy.Task task = tasks.assign(bee.getUUID(),
-                colonyNeeds(level, home), now);
+        BeeTaskPolicy.Needs needs = colonyNeeds(level, home);
+        BeeTaskPolicy.Task task = tasks.assign(bee.getUUID(), needs, now);
         // GUARD/BUILD/NURSE/REST assignments suppress recruitment only;
         // they do not replace or cancel vanilla Bee goals.
         if (task != BeeTaskPolicy.Task.FORAGE) return;
 
-        BlockPos candidate = choose(shared, level, home, bee.blockPosition(), now);
+        BlockPos candidate = choose(shared, level, home, bee.blockPosition(), now,
+                needs.nectarShortage());
         if (candidate != null) bee.setSavedFlowerPos(candidate);
     }
 
@@ -87,14 +91,15 @@ public final class BeeFlowerEvents {
     }
 
     private static BlockPos choose(BeeFlowerMemory shared, ServerLevel level,
-            BlockPos home, BlockPos receiver, long now) {
-        BlockPos result = selectFrom(shared, level, home, home, receiver, now);
+            BlockPos home, BlockPos receiver, long now, double receiverNeed) {
+        BlockPos result = selectFrom(shared, level, home, home, receiver, now, receiverNeed);
         if (result != null) return result;
         // Only directly adjacent vanilla hives share observations.
         for (Direction direction : Direction.values()) {
             BlockPos neighborHive = home.relative(direction);
             if (level.hasChunkAt(neighborHive) && isVanillaHive(level, neighborHive)) {
-                result = selectFrom(shared, level, neighborHive, home, receiver, now);
+                result = selectFrom(shared, level, neighborHive, home, receiver, now,
+                        receiverNeed);
                 if (result != null) return result;
             }
         }
@@ -102,7 +107,8 @@ public final class BeeFlowerEvents {
     }
 
     private static BlockPos selectFrom(BeeFlowerMemory shared, ServerLevel level,
-            BlockPos rememberedBy, BlockPos home, BlockPos receiver, long now) {
+            BlockPos rememberedBy, BlockPos home, BlockPos receiver, long now,
+            double receiverNeed) {
         BlockPos bestPosition = null;
         double bestScore = 0.05;
         for (BeeFlowerMemory.FlowerObservation observation
@@ -126,9 +132,11 @@ public final class BeeFlowerEvents {
                     observation.utility(), observation.utility(), distance,
                     competition, danger, observation.confidence());
             double score = BeeForagePolicy.score(patch);
-            if (score > bestScore || (score == bestScore
+            double recruitmentPriority = BeeRecruitmentPolicy.priority(
+                    score, observation.confidence(), receiverNeed, competition);
+            if (recruitmentPriority > bestScore || (recruitmentPriority == bestScore
                     && (bestPosition == null || flower.asLong() < bestPosition.asLong()))) {
-                bestScore = score;
+                bestScore = recruitmentPriority;
                 bestPosition = flower;
             }
         }

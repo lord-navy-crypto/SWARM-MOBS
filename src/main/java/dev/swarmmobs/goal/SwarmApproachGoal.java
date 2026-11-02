@@ -20,6 +20,8 @@ import dev.swarmmobs.algorithm.SwarmMovementPolicy;
 import dev.swarmmobs.algorithm.SwarmLocalPlannerPolicy;
 import dev.swarmmobs.algorithm.SwarmPathEvidencePolicy;
 import dev.swarmmobs.algorithm.SwarmNavigationRecoveryPolicy;
+import dev.swarmmobs.algorithm.SwarmSpeciesNavigationPolicy;
+import dev.swarmmobs.algorithm.SwarmRouteFailureRegistry;
 import dev.swarmmobs.algorithm.SwarmRecoveryCandidatePolicy;
 import dev.swarmmobs.algorithm.SwarmRangedHandoffPolicy;
 import dev.swarmmobs.algorithm.SwarmZombieFlankHandoffPolicy;
@@ -546,6 +548,10 @@ public final class SwarmApproachGoal extends Goal {
         boolean accepted = mob.getNavigation().moveTo(
                 navigationX, targetY, navigationZ, speed);
         if (!accepted) {
+            if (mob.level() instanceof ServerLevel failedLevel) {
+                SwarmRouteFailureRegistry.reportFailure(failedLevel,
+                        BlockPos.containing(navigationX, targetY, navigationZ), now);
+            }
             commandIssued = false;
             lastRejectedTick = now;
             lastRejectedX = navigationX;
@@ -569,6 +575,10 @@ public final class SwarmApproachGoal extends Goal {
             return;
         }
         lastRejectedTick = Long.MIN_VALUE;
+        if (mob.level() instanceof ServerLevel acceptedLevel) {
+            SwarmRouteFailureRegistry.reportSuccess(acceptedLevel,
+                    BlockPos.containing(navigationX, targetY, navigationZ));
+        }
         commandIssued = true;
         lastCommandTick = now;
         lastCommandX = navigationX;
@@ -611,7 +621,10 @@ public final class SwarmApproachGoal extends Goal {
         }
 
         double lookahead = SwarmConfig.NAV_OBSTACLE_LOOKAHEAD.get();
-        double lateralDistance = SwarmConfig.NAV_OBSTACLE_LATERAL_DISTANCE.get();
+        var speciesProfile = SwarmSpeciesNavigationPolicy.profile(mob);
+        double lateralDistance = SwarmConfig.NAV_OBSTACLE_LATERAL_DISTANCE.get()
+                * speciesProfile.obstacleLateralScale();
+        long gameTick = level.getGameTime();
         Vec2 forward = toTarget.scale(1.0 / distance);
         Vec2 left = new Vec2(-forward.z(), forward.x());
 
@@ -628,7 +641,11 @@ public final class SwarmApproachGoal extends Goal {
         for (int i = 0; i < lateralScales.length; i++) {
             Vec2 candidate = frontProbe.add(left.scale(lateralDistance * lateralScales[i]));
             candidatePoints.add(candidate);
-            blockedCandidates[i] = isProbeBlocked(level, candidate.x(), candidate.z());
+            blockedCandidates[i] = isProbeBlocked(level, candidate.x(), candidate.z())
+                    || SwarmRouteFailureRegistry.shouldAvoid(level,
+                            BlockPos.containing(candidate.x(), mob.getY(), candidate.z()),
+                            gameTick, speciesProfile.repeatedFailureThreshold(),
+                            speciesProfile.failureMemoryTicks());
         }
         // A blocked candidate never calls createPath. Reserving all four slots
         // wastes the shared per-tick budget and can starve viable candidates.
@@ -690,7 +707,12 @@ public final class SwarmApproachGoal extends Goal {
                         pathResidualDistance,
                         SwarmConfig.NAV_PATH_MAX_RESIDUAL_DISTANCE.get()
                 );
-                if (!pathReachable) unreachableCount++;
+                BlockPos evidencePosition = BlockPos.containing(
+                        candidate.x(), mob.getY(), candidate.z());
+                if (!pathReachable) {
+                    SwarmRouteFailureRegistry.reportFailure(level, evidencePosition, gameTick);
+                    unreachableCount++;
+                }
             }
 
             candidates.add(new SwarmLocalPlannerPolicy.Candidate(
@@ -710,7 +732,8 @@ public final class SwarmApproachGoal extends Goal {
                 candidates,
                 SwarmConfig.NAV_LOCAL_PROGRESS_WEIGHT.get(),
                 SwarmConfig.NAV_LOCAL_LATERAL_PENALTY.get(),
-                SwarmConfig.NAV_LOCAL_CONGESTION_PENALTY.get(),
+                SwarmConfig.NAV_LOCAL_CONGESTION_PENALTY.get()
+                        * speciesProfile.congestionPenaltyScale(),
                 SwarmConfig.NAV_PATH_NODE_PENALTY.get(),
                 SwarmConfig.NAV_PATH_RESIDUAL_PENALTY.get()
         );
@@ -803,12 +826,15 @@ public final class SwarmApproachGoal extends Goal {
             Vec2 self,
             Vec2 destination
     ) {
+        var speciesProfile = SwarmSpeciesNavigationPolicy.profile(mob);
         List<SwarmRecoveryCandidatePolicy.RecoveryCandidate> generated =
                 SwarmRecoveryCandidatePolicy.generate(
                         self,
                         destination,
                         SwarmConfig.NAV_RECOVERY_LATERAL_DISTANCE.get()
+                                * speciesProfile.recoveryLateralScale()
                 );
+        long gameTick = level.getGameTime();
 
         if (generated.isEmpty()) {
             SwarmPathBudgetRegistry.cancel(level, mob);
@@ -821,7 +847,11 @@ public final class SwarmApproachGoal extends Goal {
         boolean[] blockedCandidates = new boolean[generated.size()];
         for (int i = 0; i < candidatePoints.size(); i++) {
             Vec2 point = candidatePoints.get(i);
-            blockedCandidates[i] = isProbeBlocked(level, point.x(), point.z());
+            blockedCandidates[i] = isProbeBlocked(level, point.x(), point.z())
+                    || SwarmRouteFailureRegistry.shouldAvoid(level,
+                            BlockPos.containing(point.x(), mob.getY(), point.z()),
+                            gameTick, speciesProfile.repeatedFailureThreshold(),
+                            speciesProfile.failureMemoryTicks());
         }
         int requiredPathQueries = SwarmPathProbePolicy.requiredQueries(
                 blockedCandidates, SwarmConfig.NAV_PATH_EVIDENCE_ENABLED.get()
@@ -869,7 +899,12 @@ public final class SwarmApproachGoal extends Goal {
                         pathResidualDistance,
                         SwarmConfig.NAV_PATH_MAX_RESIDUAL_DISTANCE.get()
                 );
-                if (!pathReachable) unreachableCount++;
+                BlockPos evidencePosition = BlockPos.containing(
+                        candidate.x(), mob.getY(), candidate.z());
+                if (!pathReachable) {
+                    SwarmRouteFailureRegistry.reportFailure(level, evidencePosition, gameTick);
+                    unreachableCount++;
+                }
             }
 
             candidates.add(new SwarmLocalPlannerPolicy.Candidate(
@@ -889,7 +924,8 @@ public final class SwarmApproachGoal extends Goal {
                 candidates,
                 SwarmConfig.NAV_LOCAL_PROGRESS_WEIGHT.get(),
                 SwarmConfig.NAV_LOCAL_LATERAL_PENALTY.get(),
-                SwarmConfig.NAV_LOCAL_CONGESTION_PENALTY.get(),
+                SwarmConfig.NAV_LOCAL_CONGESTION_PENALTY.get()
+                        * speciesProfile.congestionPenaltyScale(),
                 SwarmConfig.NAV_PATH_NODE_PENALTY.get(),
                 SwarmConfig.NAV_PATH_RESIDUAL_PENALTY.get()
         );

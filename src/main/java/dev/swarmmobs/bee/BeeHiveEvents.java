@@ -56,6 +56,10 @@ public final class BeeHiveEvents {
         boolean natural = parentState.is(Blocks.BEE_NEST);
         boolean crafted = parentState.is(Blocks.BEEHIVE);
         if (!natural && !crafted) return;
+        if (SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get()
+                && BeeColonyRuntime.alarms(level)
+                        .active(home.asLong(), level.getGameTime(),
+                                BeeColonyEvents.ALARM_HOLD_TICKS).isPresent()) return;
         if (!(level.getBlockEntity(home) instanceof BeehiveBlockEntity hive)
                 || !BeeHiveGrowthPolicy.canGrowVanilla(
                         hive.getOccupantCount(), BeehiveBlockEntity.MAX_OCCUPANTS,
