@@ -105,6 +105,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue BEE_HIVE_WAX_COST;
     public static final ModConfigSpec.IntValue BEE_HIVE_HONEY_RESERVE;
     public static final ModConfigSpec.IntValue BEE_HIVE_GROWTH_COOLDOWN_TICKS;
+    public static final ModConfigSpec.IntValue BEE_HIVE_CAPACITY;
     public static final ModConfigSpec.IntValue NEST_MAX_POPULATION;
     public static final ModConfigSpec.BooleanValue NEST_ADAPTIVE_RECRUITMENT;
     public static final ModConfigSpec.DoubleValue NEST_WORKER_TARGET_SHARE;
@@ -484,6 +485,10 @@ public final class SwarmConfig {
         BEE_HIVE_GROWTH_COOLDOWN_TICKS = BUILDER
                 .comment("Minimum ticks between successful physical hive extensions for one connected bee colony.")
                 .defineInRange("beeHiveGrowthCooldownTicks", 2400, 400, 24000);
+
+        BEE_HIVE_CAPACITY = BUILDER
+                .comment("Configured occupants per vanilla bee nest or beehive. The runtime mixin applies this limit to vanilla hive entry.")
+                .defineInRange("beeHiveCapacity", 8, 3, 16);
 
         BEE_COLONY_SHELTER_ENABLED = BUILDER
                 .comment("EXPERIMENTAL: locally warn unladen vanilla Bees about visible hostile mobs near their own hive and let a deterministic subset return home. Does not assign attack targets; OFF by default.")

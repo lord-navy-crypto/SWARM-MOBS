@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.BeehiveBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
+import dev.swarmmobs.config.SwarmConfig;
 
 /** Bounded face-connected snapshot of vanilla BEE_NEST/BEEHIVE block entities. */
 public final class BeeHiveColonySnapshot {
@@ -100,7 +101,7 @@ public final class BeeHiveColonySnapshot {
         hives.sort(Comparator.comparingInt((Hive h) -> h.position().getY())
                 .thenComparingInt(h -> h.position().getX())
                 .thenComparingInt(h -> h.position().getZ()));
-        int capacity = Math.multiplyExact(hives.size(), BeehiveBlockEntity.MAX_OCCUPANTS);
+        int capacity = Math.multiplyExact(hives.size(), SwarmConfig.BEE_HIVE_CAPACITY.get());
         return new Snapshot(hives, totalOccupants, capacity, totalHoney, complete, overflow);
     }
 

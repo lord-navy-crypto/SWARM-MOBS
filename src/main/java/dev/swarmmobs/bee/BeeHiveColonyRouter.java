@@ -30,7 +30,7 @@ public final class BeeHiveColonyRouter {
         int maxHives = SwarmConfig.BEE_HIVE_MAX_EXTENSIONS.get() + 1;
         BeeHiveColonySnapshot.Snapshot colony = memory.snapshot(level, home, now, maxHives);
         if (!colony.complete() || colony.overflow() || colony.hives().size() < 2
-                || liveOccupants(level, home) < BeehiveBlockEntity.MAX_OCCUPANTS) return false;
+                || liveOccupants(level, home) < SwarmConfig.BEE_HIVE_CAPACITY.get()) return false;
 
         var candidates = colony.hives().stream()
                 .filter(hive -> !hive.position().equals(home))
@@ -40,7 +40,7 @@ public final class BeeHiveColonyRouter {
                         bee.distanceToSqr(hive.position().getX() + 0.5,
                                 hive.position().getY() + 0.5, hive.position().getZ() + 0.5)))
                 .filter(candidate -> candidate.load() >= 0
-                        && candidate.load() < BeehiveBlockEntity.MAX_OCCUPANTS)
+                        && candidate.load() < SwarmConfig.BEE_HIVE_CAPACITY.get())
                 .sorted(Comparator.comparingInt(Candidate::load)
                         .thenComparingDouble(Candidate::distance)
                         .thenComparingLong(candidate -> candidate.position().asLong()))

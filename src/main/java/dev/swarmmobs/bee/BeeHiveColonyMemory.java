@@ -4,7 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.entity.BeehiveBlockEntity;
+import dev.swarmmobs.config.SwarmConfig;
 
 /** Bounded transient cache and overflow-slot reservations for vanilla hive colonies. */
 public final class BeeHiveColonyMemory {
@@ -41,7 +41,7 @@ public final class BeeHiveColonyMemory {
     public boolean reserve(UUID beeId, BlockPos targetHive, int storedOccupants, long now) {
         if (targetHive == null) throw new IllegalArgumentException("targetHive");
         return reservations.reserve(beeId, targetHive.asLong(), storedOccupants, now,
-                BeehiveBlockEntity.MAX_OCCUPANTS);
+                SwarmConfig.BEE_HIVE_CAPACITY.get());
     }
 
     public int reservedSlots(long hivePosition, long now) {
