@@ -35,6 +35,9 @@ import dev.swarmmobs.algorithm.SwarmTaskDemandPolicy;
 import dev.swarmmobs.algorithm.SwarmTaskSaturationPolicy;
 import dev.swarmmobs.algorithm.SwarmSearchPlanner;
 import dev.swarmmobs.algorithm.SwarmSearchRallyPolicy;
+import dev.swarmmobs.algorithm.SwarmSearchTrailField;
+import dev.swarmmobs.algorithm.SwarmSearchCoveragePolicy;
+import dev.swarmmobs.algorithm.SwarmTacticalDoctrinePolicy;
 import dev.swarmmobs.algorithm.SwarmNeighborSelectionPolicy;
 import dev.swarmmobs.algorithm.SwarmSupportSpacingPolicy;
 import dev.swarmmobs.algorithm.SwarmTargetSquadPolicy;
@@ -56,7 +59,6 @@ import dev.swarmmobs.goal.SwarmIdleNestGoal;
 import dev.swarmmobs.goal.SwarmZombieColonyHaulGoal;
 import dev.swarmmobs.goal.SwarmZombieBerryForageGoal;
 import dev.swarmmobs.goal.SwarmZombieColonyGatherGoal;
-import dev.swarmmobs.goal.SwarmZombiePheromoneExploreGoal;
 import dev.swarmmobs.goal.SwarmZombieColonyHuntGoal;
 import dev.swarmmobs.goal.SwarmSpiderColonyScoutGoal;
 import dev.swarmmobs.goal.SwarmCreeperSwellGoal;
@@ -80,9 +82,14 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.UUID;
 
 public final class SwarmMobEvents {
+    // Per-dimension, bounded memory of actually visited target-search areas.
+    private static final Map<ServerLevel, SwarmSearchTrailField> SEARCH_TRAILS =
+            new WeakHashMap<>();
 
     private record TargetSelection(
             TargetObservation observation,
@@ -125,9 +132,6 @@ public final class SwarmMobEvents {
             mob.goalSelector.addGoal(3, new SwarmZombieColonyHuntGoal(builder));
             mob.goalSelector.addGoal(4, new SwarmZombieColonyGatherGoal(builder));
             mob.goalSelector.addGoal(5, new SwarmZombieBerryForageGoal(builder));
-            // Last-resort short exploration along actual locally sensed
-            // pheromone gradients, not an omniscient direct route to prey.
-            mob.goalSelector.addGoal(6, new SwarmZombiePheromoneExploreGoal(builder));
         }
     }
 
@@ -357,9 +361,21 @@ public final class SwarmMobEvents {
 
         boolean searchMode = !selection.direct()
                 && confidence < SwarmConfig.SEARCH_CONFIDENCE_THRESHOLD.get();
+        boolean zombieColonyEngineeringEnabled =
+                SwarmConfig.ZOMBIE_COLONY_ENGINEERING_ENABLED.get();
+        SwarmTacticalDoctrinePolicy.Decision tacticalDoctrine =
+                SwarmTacticalDoctrinePolicy.choose(
+                        composition, tacticalNeighbors.size() + 1, searchMode,
+                        confidence, SwarmConfig.DIVISION_OF_LABOR_ENABLED.get());
 
         if (SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()) {
-            boolean routeBlocked = SwarmEngineeringEscalationPolicy.shouldEscalate(
+            if (!zombieColonyEngineeringEnabled
+                    && (state.currentTask() == SwarmTaskType.ENGINEERING
+                        || state.currentTask() == SwarmTaskType.MATERIAL)) {
+                state.resetActiveSpecialization();
+            }
+            boolean routeBlocked = zombieColonyEngineeringEnabled
+                    && SwarmEngineeringEscalationPolicy.shouldEscalate(
                     state.plannerContext(),
                     state.plannerBlockedCount(),
                     state.plannerUnreachableCount(),
@@ -370,7 +386,8 @@ public final class SwarmMobEvents {
                     new SwarmTaskDemandPolicy.Signals(
                             searchMode,
                             routeBlocked,
-                            state.carriedEngineeringBlockCount() > 0,
+                            zombieColonyEngineeringEnabled
+                                    && state.carriedEngineeringBlockCount() > 0,
                             composition.dedicatedFlankCoverage(),
                             composition.hasBreacher(),
                             composition.rangedSupportCount() > 0,
@@ -562,6 +579,35 @@ public final class SwarmMobEvents {
                 ).plan();
             }
 
+            // Search coverage is separate from nest resource pheromones. Mark
+            // a real location only after the agent reaches its previous waypoint.
+            if (SwarmConfig.SEARCH_TRAIL_COVERAGE_ENABLED.get()) {
+                SwarmSearchTrailField field = SEARCH_TRAILS.computeIfAbsent(
+                        level, ignored -> new SwarmSearchTrailField());
+                if (state.hasDestination()
+                        && mob.distanceToSqr(state.destinationX(), mob.getY(),
+                                state.destinationZ()) <= 12.25
+                        && Math.floorMod(gameTick + mob.getId(), 40L) == 0L) {
+                    var visited = mob.blockPosition();
+                    field.mark(observation.targetId(),
+                            new SwarmSearchTrailField.Position(
+                                    visited.getX(), visited.getY(), visited.getZ()),
+                            gameTick);
+                }
+                searchPlan = SwarmSearchCoveragePolicy.adjust(
+                        searchPlan,
+                        new Vec2(observation.x(), observation.z()),
+                        assignedSlot,
+                        candidate -> field.coverage(observation.targetId(),
+                                new SwarmSearchTrailField.Position(
+                                        (int) Math.floor(candidate.x()),
+                                        mob.blockPosition().getY(),
+                                        (int) Math.floor(candidate.z())),
+                                gameTick),
+                        true
+                ).plan();
+            }
+
             // Same-target local rejoining is a bounded modification of an
             // existing sector waypoint, not a new sighting of the player.
             // Uses already collected nearby peers: no global lookup.
@@ -632,6 +678,8 @@ public final class SwarmMobEvents {
                 effectiveFormationRadius *= SwarmSpecializationRolePolicy
                         .formationRadiusMultiplier(state.specialization());
             }
+            effectiveFormationRadius *= SwarmTacticalDoctrinePolicy
+                    .formationRadiusMultiplier(tacticalDoctrine, profile.archetype());
             effectiveFormationRadius *= SwarmTacticalDoctrinePolicy
                     .formationRadiusMultiplier(tacticalDoctrine, profile.archetype());
 
