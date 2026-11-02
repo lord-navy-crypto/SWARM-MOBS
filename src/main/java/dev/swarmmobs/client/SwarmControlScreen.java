@@ -787,6 +787,32 @@ public final class SwarmControlScreen extends Screen {
         );
         y += 28;
 
+        addToggleRow(
+                x, y,
+                "Collective observation fusion",
+                bool("observationFusionEnabled"),
+                "toggle_observation_fusion"
+        );
+        y += 28;
+
+        addNumericRow(
+                x, y,
+                "Fusion time window",
+                (int) number("observationFusionWindowTicks") + " ticks",
+                "fusion_window_delta",
+                1.0
+        );
+        y += 28;
+
+        addStatusRow(
+                x, y,
+                "Fusions / agents / contributors",
+                (int) number("observationFusionCount") + " / "
+                        + (int) number("observationFusionAgents") + " / "
+                        + format(number("observationFusionAvgContributors"))
+        );
+        y += 34;
+
         addNumericRow(
                 x, y,
                 "Packet drop",

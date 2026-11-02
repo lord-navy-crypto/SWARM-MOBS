@@ -520,11 +520,17 @@ public final class SwarmControlNetwork {
                     1.0,
                     96.0
             ));
+            case "toggle_observation_fusion" -> SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.set(
+                    !SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.get());
+            case "fusion_window_delta" -> SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS.set(
+                    (int) clamp(SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS.get() + value, 0.0, 20.0));
             case "comm_baseline" -> {
                 SwarmConfig.COMMUNICATION_ENABLED.set(true);
                 SwarmConfig.COMMUNICATION_LATENCY_TICKS.set(0);
                 SwarmConfig.COMMUNICATION_PACKET_DROP_RATE.set(0.0);
                 SwarmConfig.COMMUNICATION_RADIUS.set(16.0);
+                SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.set(true);
+                SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS.set(4);
             }
 
             case "search_threshold_delta" -> SwarmConfig.SEARCH_CONFIDENCE_THRESHOLD.set(clamp(
@@ -846,6 +852,10 @@ public final class SwarmControlNetwork {
         long supportLaneSwitches = 0, supportFeasibleSamples = 0,
                 supportUnavailableSamples = 0;
         long nestsFoundedByLoadedAgents = 0L;
+        long collectiveObservationFusions = 0L;
+        int agentsWithRecentFusion = 0;
+        long fusionContributorTotal = 0L;
+        double maximumFusionDisagreement = 0.0;
         EnumMap<SwarmTaskType, Integer> taskCounts = new EnumMap<>(SwarmTaskType.class);
         EnumMap<SwarmSpecialization, Integer> specializationCounts =
                 new EnumMap<>(SwarmSpecialization.class);
@@ -874,6 +884,13 @@ public final class SwarmControlNetwork {
             if (masterEnabled) {
                 SwarmAgentState tacticalState =
                         mob.getData(SwarmAttachments.AGENT_STATE.get());
+                collectiveObservationFusions += tacticalState.collectiveObservationFusionCount();
+                if (tacticalState.lastFusionContributorCount() > 1) {
+                    agentsWithRecentFusion++;
+                    fusionContributorTotal += tacticalState.lastFusionContributorCount();
+                    maximumFusionDisagreement = Math.max(
+                            maximumFusionDisagreement, tacticalState.lastFusionDisagreement());
+                }
                 if (tacticalState.targetId() != null) {
                     if (tacticalState.coveringVacantFlank()) activeFlankFillers++;
                     if (tacticalState.rangedSpacingActive()) skeletonSpacing++;
@@ -962,6 +979,13 @@ public final class SwarmControlNetwork {
                 pair("aiRationale", decision.rationale()),
                 pair("aiLastError", ai.lastError()),
                 pair("playerLearningEnabled", SwarmConfig.PLAYER_LEARNING_ENABLED.get()),
+                pair("observationFusionEnabled", SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.get()),
+                pair("observationFusionWindowTicks", SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS.get()),
+                pair("observationFusionCount", Math.min(Integer.MAX_VALUE, collectiveObservationFusions)),
+                pair("observationFusionAgents", agentsWithRecentFusion),
+                pair("observationFusionAvgContributors", agentsWithRecentFusion == 0
+                        ? 0.0 : fusionContributorTotal / (double) agentsWithRecentFusion),
+                pair("observationFusionMaxDisagreement", maximumFusionDisagreement),
                 pair("learningProfiles", playerLearning.profiles()),
                 pair("learningSamples", playerLearning.samples()),
                 pair("learningDominantStyle", playerLearning.dominantStyle().name()),
