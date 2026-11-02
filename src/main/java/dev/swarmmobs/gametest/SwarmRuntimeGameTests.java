@@ -6130,8 +6130,12 @@ public final class SwarmRuntimeGameTests {
             }
             var colony = BeeColonyRuntime.hives(helper.getLevel()).snapshot(
                     helper.getLevel(), home, helper.getLevel().getGameTime(), 9);
-            if (!colony.complete() || colony.hives().size() != 2 || colony.capacity() != 6) {
-                helper.fail("Connected colony snapshot did not include both native hive blocks");
+            int expectedColonyCapacity = 2 * SwarmConfig.BEE_HIVE_CAPACITY.get();
+            if (!colony.complete() || colony.hives().size() != 2
+                    || colony.capacity() != expectedColonyCapacity) {
+                helper.fail("Connected colony snapshot mismatch: hives=" + colony.hives().size()
+                        + ", capacity=" + colony.capacity()
+                        + ", expectedCapacity=" + expectedColonyCapacity);
                 return;
             }
             helper.succeed();
