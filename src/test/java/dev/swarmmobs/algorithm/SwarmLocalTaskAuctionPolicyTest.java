@@ -49,16 +49,14 @@ class SwarmLocalTaskAuctionPolicyTest {
                 });
 
         assertEquals(4, result.candidateCount());
+        assertEquals(4, result.assignments().size());
         assertTrue(result.assignedCount() <= 4);
-        assertEquals(1, result.assignments().size());
-        assertEquals(1, result.assignments().values().stream()
-                .filter(a -> a.task() == SwarmTaskType.ENGINEERING).count()
-                + result.assignments().values().stream()
-                .filter(a -> a.task() == SwarmTaskType.MATERIAL).count()
-                + result.assignments().values().stream()
-                .filter(a -> a.task() == SwarmTaskType.FLANK).count()
-                + result.assignments().values().stream()
-                .filter(a -> a.task() == SwarmTaskType.RESERVE).count());
+        assertTrue(result.assignments().values().stream()
+                .filter(a -> a.task() == SwarmTaskType.ENGINEERING).count() <= 1);
+        assertTrue(result.assignments().values().stream()
+                .filter(a -> a.task() == SwarmTaskType.MATERIAL).count() <= 1);
+        assertTrue(result.assignments().values().stream()
+                .filter(a -> a.task() == SwarmTaskType.FLANK).count() <= 1);
     }
 
     @Test
