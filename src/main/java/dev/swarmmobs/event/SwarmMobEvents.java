@@ -13,6 +13,7 @@ import dev.swarmmobs.algorithm.CapabilitySlotAllocator;
 import dev.swarmmobs.algorithm.SwarmLocalRoleCoveragePolicy;
 import dev.swarmmobs.algorithm.SwarmCombatPlanner;
 import dev.swarmmobs.algorithm.SwarmAdaptiveTacticsPolicy;
+import dev.swarmmobs.algorithm.SwarmTacticalHysteresisPolicy;
 import dev.swarmmobs.algorithm.SwarmPackDecongestionPolicy;
 import dev.swarmmobs.algorithm.SwarmCrowdWaypointWorldPolicy;
 import dev.swarmmobs.algorithm.SwarmCombatBusyPolicy;
@@ -55,6 +56,10 @@ import dev.swarmmobs.ai.SwarmAiActiveState;
 import dev.swarmmobs.ai.SwarmAiControlPolicy;
 import dev.swarmmobs.ai.SwarmAiRoleBiasPolicy;
 import dev.swarmmobs.ai.SwarmAiTaskDemandPolicy;
+import dev.swarmmobs.ai.SwarmPlayerStylePolicy;
+import dev.swarmmobs.ai.SwarmPlayerStyleRegistry;
+import dev.swarmmobs.ai.SwarmPlayerMotionPolicy;
+import dev.swarmmobs.ai.SwarmPlayerMotionRegistry;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.data.SwarmAttachments;
 import dev.swarmmobs.debug.SwarmDebugParticles;
@@ -261,6 +266,9 @@ public final class SwarmMobEvents {
         state.updateEngagement(true,squadCombat,gameTick);
         if (selection.direct()) {
             state.recordDirectReacquisition(gameTick, observation.targetId());
+            if (SwarmConfig.PLAYER_LEARNING_ENABLED.get()) {
+                SwarmPlayerMotionRegistry.observe(level, observation, gameTick);
+            }
         }
         int slots = SwarmConfig.FORMATION_SLOTS.get();
 
@@ -363,6 +371,29 @@ public final class SwarmMobEvents {
         double aiSearchRadiusMultiplier = activeStrategy == null
                 ? 1.0
                 : activeStrategy.searchRadiusMultiplier();
+
+        boolean playerLearningEnabled = SwarmConfig.PLAYER_LEARNING_ENABLED.get();
+        var learnedAttackStyle = SwarmPlayerStylePolicy.choose(
+                playerLearningEnabled
+                        ? SwarmPlayerStyleRegistry.snapshot(level, observation.targetId(), gameTick)
+                        : null,
+                playerLearningEnabled);
+        var learnedMovementStyle = SwarmPlayerMotionPolicy.choose(
+                playerLearningEnabled
+                        ? SwarmPlayerMotionRegistry.snapshot(level, observation.targetId(), gameTick)
+                        : null,
+                playerLearningEnabled);
+        aiFormationMultiplier = Math.max(0.70, Math.min(1.50,
+                aiFormationMultiplier * learnedAttackStyle.formationRadiusMultiplier()
+                        * learnedMovementStyle.formationRadiusMultiplier()));
+        aiSeparationMultiplier = Math.max(0.70, Math.min(1.50,
+                aiSeparationMultiplier * learnedAttackStyle.separationMultiplier()
+                        * learnedMovementStyle.separationMultiplier()));
+        aiCohesionMultiplier = Math.max(0.70, Math.min(1.50,
+                aiCohesionMultiplier * learnedAttackStyle.cohesionMultiplier()
+                        * learnedMovementStyle.cohesionMultiplier()));
+        aiSearchRadiusMultiplier = Math.max(0.80, Math.min(1.40,
+                aiSearchRadiusMultiplier * learnedMovementStyle.searchRadiusMultiplier()));
 
         boolean searchMode = !selection.direct()
                 && confidence < SwarmConfig.SEARCH_CONFIDENCE_THRESHOLD.get();
@@ -703,6 +734,11 @@ public final class SwarmMobEvents {
                             .toList(),
                     SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()
             );
+            var stabilizedFrame = SwarmTacticalHysteresisPolicy.update(
+                    state.tacticalHysteresisState(), tacticalFrame, gameTick,
+                    SwarmConfig.TACTICAL_PATTERN_HYSTERESIS_TICKS.get());
+            state.setTacticalHysteresisState(stabilizedFrame.state());
+            tacticalFrame = stabilizedFrame.frame() == null ? tacticalFrame : stabilizedFrame.frame();
             String speciesTactic = switch (profile.archetype()) {
                 case ASSAULT -> zombieTactics.mode().name();
                 case RANGED_SUPPORT -> skeletonTactics.mode().name();

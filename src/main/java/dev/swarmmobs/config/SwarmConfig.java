@@ -27,6 +27,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue FORMATION_SLOTS;
     public static final ModConfigSpec.IntValue FORMATION_SLOT_HYSTERESIS_TICKS;
     public static final ModConfigSpec.IntValue ROLE_HYSTERESIS_TICKS;
+    public static final ModConfigSpec.IntValue TACTICAL_PATTERN_HYSTERESIS_TICKS;
     public static final ModConfigSpec.DoubleValue FORMATION_RADIUS;
     public static final ModConfigSpec.DoubleValue SEPARATION_RADIUS;
     public static final ModConfigSpec.DoubleValue SEPARATION_WEIGHT;
@@ -143,6 +144,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.ConfigValue<String> OLLAMA_MODEL;
     public static final ModConfigSpec.IntValue OLLAMA_TIMEOUT_MS;
     public static final ModConfigSpec.ConfigValue<String> OLLAMA_KEEP_ALIVE;
+    public static final ModConfigSpec.BooleanValue PLAYER_LEARNING_ENABLED;
 
     public static final ModConfigSpec SPEC;
 
@@ -188,6 +190,10 @@ public final class SwarmConfig {
         ROLE_HYSTERESIS_TICKS = BUILDER
                 .comment("How long a different tactical responsibility must remain stable before role reassignment.")
                 .defineInRange("roleHysteresisTicks", 12, 0, 200);
+
+        TACTICAL_PATTERN_HYSTERESIS_TICKS = BUILDER
+                .comment("How long a different encounter geometry must remain supported by fresh observations before an agent changes its tactical pattern.")
+                .defineInRange("tacticalPatternHysteresisTicks", 12, 0, 100);
 
         FORMATION_RADIUS = BUILDER
                 .comment("Nominal ring radius around the shared target.")
@@ -651,6 +657,14 @@ public final class SwarmConfig {
         OLLAMA_KEEP_ALIVE = BUILDER
                 .comment("Ollama keep_alive value used for shadow strategy requests.")
                 .define("ollamaKeepAlive", "5m");
+
+        BUILDER.pop();
+
+        BUILDER.push("playerLearning");
+
+        PLAYER_LEARNING_ENABLED = BUILDER
+                .comment("Enable session-local, decaying player combat-style and movement-style learning. Only broad categories and motion summaries are retained in memory; no raw histories, coordinates, chat, inventory or uploads.")
+                .define("enabled", true);
 
         BUILDER.pop();
 

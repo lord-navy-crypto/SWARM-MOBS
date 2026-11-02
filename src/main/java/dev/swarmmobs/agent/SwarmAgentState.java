@@ -4,6 +4,8 @@ import dev.swarmmobs.algorithm.SwarmCommunicationPolicy.TargetMessage;
 import dev.swarmmobs.algorithm.TargetObservation;
 import dev.swarmmobs.algorithm.SwarmEngagementPolicy;
 import dev.swarmmobs.algorithm.SwarmSupportPositionPolicy;
+import dev.swarmmobs.algorithm.SwarmAdaptiveTacticsPolicy;
+import dev.swarmmobs.algorithm.SwarmTacticalHysteresisPolicy;
 import dev.swarmmobs.algorithm.SwarmGameHandoffTimeoutPolicy;
 import dev.swarmmobs.algorithm.SwarmFailedWaypointMemory;
 import net.minecraft.core.BlockPos;
@@ -47,6 +49,8 @@ public final class SwarmAgentState {
     private SwarmRole role = SwarmRole.CHASER;
     // Runtime-only encounter geometry, used for inspection and acceptance.
     private String tacticalPattern = "STANDARD";
+    private SwarmTacticalHysteresisPolicy.State tacticalHysteresisState =
+            SwarmTacticalHysteresisPolicy.State.empty();
     private boolean searchRallyActive;
     private long searchRallyEpisodes;
     // Updated by local same-target sightings, consulted by vanilla bow handoff.
@@ -182,6 +186,7 @@ public final class SwarmAgentState {
         tacticalAssignmentTarget = selectedTarget;
         resetSupportPositionState();
         tacticalPattern = "STANDARD";
+        tacticalHysteresisState = SwarmTacticalHysteresisPolicy.State.empty();
         searchRallyActive = false;
         coveringVacantFlank = false;
         bowLaneClear = true;
@@ -350,6 +355,15 @@ public final class SwarmAgentState {
 
     public void setTacticalPattern(String pattern) {
         tacticalPattern = pattern == null ? "STANDARD" : pattern;
+    }
+
+    public SwarmTacticalHysteresisPolicy.State tacticalHysteresisState() {
+        return tacticalHysteresisState;
+    }
+
+    public void setTacticalHysteresisState(SwarmTacticalHysteresisPolicy.State state) {
+        tacticalHysteresisState = state == null
+                ? SwarmTacticalHysteresisPolicy.State.empty() : state;
     }
 
     /** Snapshot from the last local combat plan; not a raycast every tick. */
