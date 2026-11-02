@@ -533,6 +533,35 @@ public final class SwarmMobEvents {
                     SwarmConfig.MAX_STEERING_CORRECTION.get()
             );
 
+            // Search coverage is separate from nest resource pheromones. Mark
+            // a real location only after the agent reaches its previous waypoint.
+            if (SwarmConfig.SEARCH_TRAIL_COVERAGE_ENABLED.get()) {
+                SwarmSearchTrailField field = SEARCH_TRAILS.computeIfAbsent(
+                        level, ignored -> new SwarmSearchTrailField());
+                if (state.hasDestination()
+                        && mob.distanceToSqr(state.destinationX(), mob.getY(),
+                                state.destinationZ()) <= 12.25
+                        && Math.floorMod(gameTick + mob.getId(), 40L) == 0L) {
+                    var visited = mob.blockPosition();
+                    field.mark(observation.targetId(),
+                            new SwarmSearchTrailField.Position(
+                                    visited.getX(), visited.getY(), visited.getZ()),
+                            gameTick);
+                }
+                searchPlan = SwarmSearchCoveragePolicy.adjust(
+                        searchPlan,
+                        new Vec2(observation.x(), observation.z()),
+                        assignedSlot,
+                        candidate -> field.coverage(observation.targetId(),
+                                new SwarmSearchTrailField.Position(
+                                        (int) Math.floor(candidate.x()),
+                                        mob.blockPosition().getY(),
+                                        (int) Math.floor(candidate.z())),
+                                gameTick),
+                        true
+                ).plan();
+            }
+
             // Same-target local rejoining is a bounded modification of an
             // existing sector waypoint, not a new sighting of the player.
             // Uses already collected nearby peers: no global lookup.
@@ -603,6 +632,8 @@ public final class SwarmMobEvents {
                 effectiveFormationRadius *= SwarmSpecializationRolePolicy
                         .formationRadiusMultiplier(state.specialization());
             }
+            effectiveFormationRadius *= SwarmTacticalDoctrinePolicy
+                    .formationRadiusMultiplier(tacticalDoctrine, profile.archetype());
 
             // Distinct Minecraft squad geometries use only a recent, shared
             // target observation plus physical same-target peers, never a

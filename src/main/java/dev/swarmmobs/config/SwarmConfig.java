@@ -40,6 +40,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue SEARCH_PHASE_TICKS;
     public static final ModConfigSpec.DoubleValue SEARCH_ARRIVAL_TOLERANCE;
     public static final ModConfigSpec.DoubleValue SEARCH_SPEED_FACTOR;
+    public static final ModConfigSpec.BooleanValue SEARCH_TRAIL_COVERAGE_ENABLED;
     public static final ModConfigSpec.BooleanValue TARGET_PREDICTION_ENABLED;
     public static final ModConfigSpec.IntValue TARGET_PREDICTION_LEAD_TICKS;
     public static final ModConfigSpec.IntValue TARGET_PREDICTION_MAX_TICKS;
@@ -226,6 +227,10 @@ public final class SwarmConfig {
         SEARCH_SPEED_FACTOR = BUILDER
                 .comment("Movement-speed factor used during SEARCH so expanding coverage does not slow with stale target confidence.")
                 .defineInRange("searchSpeedFactor", 1.0, 0.25, 1.5);
+
+        SEARCH_TRAIL_COVERAGE_ENABLED = BUILDER
+                .comment("Enable bounded, target-specific memory of actually visited SEARCH waypoints. This is tactical search coverage, not nest resource pheromone or resource gathering.")
+                .define("searchTrailCoverageEnabled", true);
 
         TARGET_PREDICTION_ENABLED = BUILDER
                 .comment("Enable conservative short-horizon prediction from observed target velocity.")
