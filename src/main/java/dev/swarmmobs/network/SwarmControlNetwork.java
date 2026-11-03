@@ -203,7 +203,8 @@ public final class SwarmControlNetwork {
     private static void applyAction(String action, double value, ServerPlayer player) {
         if (!action.startsWith("preset_")
                 && !action.startsWith("ai_")
-                && !action.equals("experiment_seed_delta")) {
+                && !action.equals("experiment_seed_delta")
+                && !action.equals("experiment_record")) {
             SwarmExperimentManager.markCustom();
         }
 
