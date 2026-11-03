@@ -131,6 +131,17 @@ class SwarmAgentSpecializationStateTest {
     }
 
     @Test
+    void experienceContinuesToDecayWhenNoTaskIsActive() {
+        SwarmAgentState state = new SwarmAgentState();
+        state.updateTaskExperience(null, 0.20, 0.5, 100L);
+        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 0.5, 106L);
+        assertEquals(0.20, state.taskExperience(SwarmTaskType.SEARCH), 1e-9);
+
+        state.updateTaskExperience(null, 0.20, 0.5, 112L);
+        assertEquals(0.10, state.taskExperience(SwarmTaskType.SEARCH), 1e-9);
+    }
+
+    @Test
     void activeTaskExperienceReinforcesWhileInactiveExperienceDecays() {
         SwarmAgentState state = new SwarmAgentState();
 

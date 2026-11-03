@@ -189,6 +189,12 @@ public final class SwarmMobEvents {
                 && mob.getTarget() == null) {
             state.scheduleNextPlan(gameTick, Math.max(interval, 20));
             state.updateEngagement(false,false,gameTick);
+            state.updateTaskExperience(
+                    null,
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get(),
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get(),
+                    gameTick
+            );
             state.clearLocalPlan(0);
             return;
         }
@@ -215,6 +221,12 @@ public final class SwarmMobEvents {
             state.updateTacticalSquadTelemetry(0, 0);
             state.recordSearchFailure();
             state.forgetTarget();
+            state.updateTaskExperience(
+                    null,
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get(),
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get(),
+                    gameTick
+            );
             state.clearLocalPlan(movementNeighbors.size());
             if (mob.getTarget() instanceof Player) {
                 mob.setTarget(null);
@@ -568,6 +580,12 @@ public final class SwarmMobEvents {
             );
         } else {
             state.resetActiveSpecialization(gameTick);
+            state.updateTaskExperience(
+                    null,
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get(),
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get(),
+                    gameTick
+            );
         }
 
         // Actual observed Spider coverage determines which flank is vacant.

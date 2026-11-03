@@ -45,7 +45,7 @@ Default fusion window: 4 ticks. Maximum accepted horizontal disagreement: 8 bloc
 
 ## Phase IV-C — Collective Experience and Local Task Auctions
 
-Task experience is now measured against elapsed game time rather than the number of planner updates. The existing gain and retention settings are calibrated to the original six-tick planning interval; fractional intervals compose consistently, so changing the planner cadence does not accelerate or slow learning. Catch-up after long inactive gaps is capped at 40 ticks.
+Task experience is now measured against elapsed game time rather than the number of planner updates. The existing gain and retention settings are calibrated to the original six-tick planning interval; fractional intervals compose consistently, so changing the planner cadence does not accelerate or slow learning. Catch-up after long inactive gaps is capped at 40 ticks. Inactive skills continue to decay when an agent has no target or dynamic division of labor is switched off.
 
 The same-target neighborhood now runs a deterministic local matching pass:
 
