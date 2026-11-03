@@ -17,6 +17,7 @@ import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.algorithm.SwarmEngagementPolicy;
 import dev.swarmmobs.data.SwarmAttachments;
 import dev.swarmmobs.registry.SwarmNestBlocks;
+import dev.swarmmobs.visual.SwarmActionVisuals;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
@@ -272,6 +273,7 @@ public final class SwarmZombieColonyGatherGoal extends Goal {
                 : level.getEntitiesOfClass(ItemEntity.class,new AABB(site).inflate(1.5))
                         .stream().map(ItemEntity::getUUID).collect(Collectors.toSet());
         boolean broken = level.destroyBlock(site, true, zombie);
+        SwarmActionVisuals.workCompleted(level, zombie, site, original, broken);
         if (broken && replantPlan != null) {
             SwarmNestCropReplantPolicy.replant(level,site,replantPlan,existingDrops);
         }
