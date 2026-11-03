@@ -278,7 +278,8 @@ class SwarmAgentStateTest {
         state.bindTacticalTarget(playerA);
         state.stabilizeSpecialization(
                 SwarmTaskType.ENGINEERING, SwarmSpecialization.ENGINEER, 100L, 40);
-        state.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.3, 1.0);
+        state.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.3, 1.0, 94L);
+        state.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.3, 1.0, 100L);
         double retainedLearning = state.taskExperience(SwarmTaskType.ENGINEERING);
         assertEquals(SwarmSpecialization.ENGINEER, state.specialization());
 

@@ -53,6 +53,7 @@ class SwarmAgentSpecializationStateTest {
                 100L,
                 30
         );
+        state.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.40, 1.0, 94L);
         state.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.40, 1.0, 100L);
 
         state.resetActiveSpecialization();
