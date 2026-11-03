@@ -967,6 +967,7 @@ public final class SwarmCommands {
                                         "%.3f",
                                         state.taskExperience(state.currentTask())
                                 )
+                                + " taskExperienceProfile=" + state.taskExperienceSnapshot()
                                 + " separation=" + String.format(java.util.Locale.ROOT, "%.3f", state.separationMagnitude())
                                 + " cohesion=" + String.format(java.util.Locale.ROOT, "%.3f", state.cohesionMagnitude())
                                 + " alignment=" + String.format(java.util.Locale.ROOT, "%.3f", state.alignmentMagnitude())
