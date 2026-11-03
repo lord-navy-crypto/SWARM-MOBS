@@ -17,6 +17,7 @@ import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.algorithm.SwarmEngagementPolicy;
 import dev.swarmmobs.data.SwarmAttachments;
 import dev.swarmmobs.registry.SwarmNestBlocks;
+import dev.swarmmobs.visual.SwarmActionVisuals;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -290,6 +291,7 @@ public final class SwarmZombieColonyHaulGoal extends Goal {
         if (phase == Phase.TO_ITEM) {
             if (zombie.distanceToSqr(item) <= 2.25) {
                 phase = Phase.TO_NEST;
+                SwarmActionVisuals.carrierPickup(level, zombie);
                 // Track progress independently on the return route.
                 lastProgressTick = tick;
                 bestRemainingDistanceSq = Double.POSITIVE_INFINITY;
@@ -325,6 +327,7 @@ public final class SwarmZombieColonyHaulGoal extends Goal {
                     int accepted = nest.acceptHaulDelivery(
                             item, SwarmConfig.NEST_HAUL_MAX_STACK.get());
                     if (accepted > 0) {
+                        SwarmActionVisuals.carrierDelivery(level, zombie, home, accepted);
                         if (scoutLead != null) nest.scoutBoard().discard(scoutLead.itemId());
                         if (SwarmConfig.NEST_PHEROMONES_ENABLED.get()) {
                             // Crowding-sensitive deposition: successful routes
