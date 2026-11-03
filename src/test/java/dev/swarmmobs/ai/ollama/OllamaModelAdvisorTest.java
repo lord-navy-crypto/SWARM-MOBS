@@ -19,15 +19,27 @@ class OllamaModelAdvisorTest {
 
         var recommendations = OllamaModelAdvisor.recommend(models);
 
-        assertEquals(3, recommendations.size());
+        assertEquals(2, recommendations.size());
         assertEquals("qwen2.5:7b-instruct", recommendations.getFirst().model().name());
         assertTrue(recommendations.getFirst().score() > recommendations.getLast().score());
-        assertTrue(recommendations.getLast().rationale().contains("embedding"));
+        assertTrue(recommendations.stream().noneMatch(
+                recommendation -> recommendation.model().name().contains("embed")
+        ));
     }
 
     @Test
     void recommendationListIsEmptyWhenNoModelsAreInstalled() {
         assertTrue(OllamaModelAdvisor.recommend(List.of()).isEmpty());
+    }
+
+    @Test
+    void embeddingOnlyModelsAreNotRecommendedForChat() {
+        List<ModelInfo> models = List.of(
+                new ModelInfo("nomic-embed-text:latest", 274000000L, "bert", "137M", "F16", ""),
+                new ModelInfo("bge-m3:latest", 1200000000L, "bert", "568M", "F16", "")
+        );
+
+        assertTrue(OllamaModelAdvisor.recommend(models).isEmpty());
     }
 
     @Test
