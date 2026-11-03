@@ -1,6 +1,6 @@
 package dev.swarmmobs.ai;
 
-import dev.swarmmobs.ai.SwarmAiLearningMemory.RunRecord;
+import dev.swarmmobs.ai.SwarmAiExperienceTransfer.RunSample;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -12,7 +12,7 @@ class SwarmAiExperienceTransferTest {
 
     @Test
     void derivesModerateEvidenceFromThreeComparableSameSeedPairs() {
-        List<RunRecord> runs = new ArrayList<>();
+        List<RunSample> runs = new ArrayList<>();
         for (int seed = 11; seed <= 13; seed++) {
             runs.add(run(seed * 10L, "BASELINE", seed, 8, 1200L,
                     100L, 5L, 10L, 1L, 8L, 2L, 80L, 10L, 9L));
@@ -37,7 +37,7 @@ class SwarmAiExperienceTransferTest {
 
     @Test
     void doesNotPairRunsWithDifferentRandomSeeds() {
-        List<RunRecord> runs = List.of(
+        List<RunSample> runs = List.of(
                 run(1L, "BASELINE", 7, 8, 1000L, 100L, 5L, 10L, 1L, 8L, 2L, 80L, 10L, 9L),
                 run(2L, "NOISY_SENSING", 8, 8, 1000L, 100L, 25L, 10L, 4L, 5L, 5L, 120L, 10L, 6L)
         );
@@ -47,7 +47,7 @@ class SwarmAiExperienceTransferTest {
 
     @Test
     void refusesToTreatCombinedFaultsAsASingleFactorComparisonWithBaseline() {
-        List<RunRecord> runs = List.of(
+        List<RunSample> runs = List.of(
                 run(1L, "BASELINE", 42, 8, 1000L, 100L, 5L, 10L, 1L, 8L, 2L, 80L, 10L, 9L),
                 run(2L, "COMBINED_FAULTS", 42, 8, 1000L, 100L, 25L, 10L, 4L, 5L, 5L, 120L, 10L, 6L)
         );
@@ -57,7 +57,7 @@ class SwarmAiExperienceTransferTest {
 
     @Test
     void countsRepeatedPairsFromOneSeedAsOneIndependentReplication() {
-        List<RunRecord> runs = List.of(
+        List<RunSample> runs = List.of(
                 run(1L, "BASELINE", 42, 8, 1000L, 100L, 5L, 10L, 1L, 8L, 2L, 80L, 10L, 9L),
                 run(2L, "NOISY_SENSING", 42, 8, 1000L, 100L, 25L, 10L, 4L, 5L, 5L, 120L, 10L, 6L),
                 run(3L, "BASELINE", 42, 8, 1020L, 100L, 5L, 10L, 1L, 8L, 2L, 80L, 10L, 9L),
@@ -75,7 +75,7 @@ class SwarmAiExperienceTransferTest {
 
     @Test
     void rejectsPairsWithMateriallyDifferentPopulationOrDuration() {
-        List<RunRecord> runs = List.of(
+        List<RunSample> runs = List.of(
                 run(1L, "BASELINE", 42, 4, 1000L, 100L, 5L, 10L, 1L, 8L, 2L, 80L, 10L, 9L),
                 run(2L, "NOISY_SENSING", 42, 20, 1000L, 100L, 25L, 10L, 4L, 5L, 5L, 120L, 10L, 6L),
                 run(3L, "BASELINE", 43, 8, 200L, 100L, 5L, 10L, 1L, 8L, 2L, 80L, 10L, 9L),
@@ -85,17 +85,17 @@ class SwarmAiExperienceTransferTest {
         assertTrue(SwarmAiExperienceTransfer.analyze(runs).isEmpty());
     }
 
-    private static RunRecord run(
+    private static RunSample run(
             long id, String preset, int seed, int agents, long ticks,
             long delivered, long dropped, long recoveryAttempts, long recoveryFailures,
             long searchSucceeded, long searchFailed, long reacquisitionTicks,
             long engineeringClaims, long engineeringCompleted
     ) {
-        return new RunRecord(
+        return new RunSample(
                 id, id * 100L, preset, seed, ticks, agents,
-                delivered, dropped, 0L, 0L, recoveryAttempts, recoveryFailures, 0L,
-                searchSucceeded + searchFailed, searchSucceeded, searchFailed, reacquisitionTicks,
-                0L, engineeringClaims, engineeringCompleted, 0L, 0L
+                delivered, dropped, recoveryAttempts, recoveryFailures,
+                searchSucceeded, searchFailed, reacquisitionTicks,
+                engineeringClaims, engineeringCompleted
         );
     }
 }

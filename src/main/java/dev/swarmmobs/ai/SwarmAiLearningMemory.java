@@ -119,7 +119,26 @@ public final class SwarmAiLearningMemory extends SavedData {
      * stale when the bounded 40-run history rolls forward.
      */
     public synchronized List<SwarmAiExperienceTransfer.Insight> experienceTransfer() {
-        return SwarmAiExperienceTransfer.analyze(List.copyOf(runs));
+        List<SwarmAiExperienceTransfer.RunSample> samples = runs.stream()
+                .map(run -> new SwarmAiExperienceTransfer.RunSample(
+                        run.id(),
+                        run.gameTick(),
+                        run.preset(),
+                        run.seed(),
+                        run.elapsedTicks(),
+                        run.agentCount(),
+                        run.communicationDelivered(),
+                        run.communicationDropped(),
+                        run.recoveryAttempts(),
+                        run.recoveryFailures(),
+                        run.searchSucceeded(),
+                        run.searchFailed(),
+                        run.searchReacquisitionTicks(),
+                        run.engineeringClaims(),
+                        run.engineeringCompleted()
+                ))
+                .toList();
+        return SwarmAiExperienceTransfer.analyze(samples);
     }
 
     public synchronized EvaluationEntry lastEvaluation() {

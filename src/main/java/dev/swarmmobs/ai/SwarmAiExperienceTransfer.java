@@ -1,7 +1,5 @@
 package dev.swarmmobs.ai;
 
-import dev.swarmmobs.ai.SwarmAiLearningMemory.RunRecord;
-
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -42,28 +40,28 @@ public final class SwarmAiExperienceTransfer {
 
     private enum Metric {
         COMMUNICATION_DROP_RATE(false, 0.02, 20L) {
-            @Override double value(RunRecord run) { return run.communicationDropRate(); }
-            @Override long samples(RunRecord run) {
+            @Override double value(RunSample run) { return run.communicationDropRate(); }
+            @Override long samples(RunSample run) {
                 return run.communicationDelivered() + run.communicationDropped();
             }
         },
         RECOVERY_FAILURE_RATE(false, 0.02, 5L) {
-            @Override double value(RunRecord run) { return run.recoveryFailureRate(); }
-            @Override long samples(RunRecord run) { return run.recoveryAttempts(); }
+            @Override double value(RunSample run) { return run.recoveryFailureRate(); }
+            @Override long samples(RunSample run) { return run.recoveryAttempts(); }
         },
         SEARCH_SUCCESS_RATE(true, 0.02, 3L) {
-            @Override double value(RunRecord run) { return run.searchSuccessRate(); }
-            @Override long samples(RunRecord run) {
+            @Override double value(RunSample run) { return run.searchSuccessRate(); }
+            @Override long samples(RunSample run) {
                 return run.searchSucceeded() + run.searchFailed();
             }
         },
         AVERAGE_REACQUISITION_TICKS(false, 2.0, 3L) {
-            @Override double value(RunRecord run) { return run.averageReacquisitionTicks(); }
-            @Override long samples(RunRecord run) { return run.searchSucceeded(); }
+            @Override double value(RunSample run) { return run.averageReacquisitionTicks(); }
+            @Override long samples(RunSample run) { return run.searchSucceeded(); }
         },
         ENGINEERING_TASK_COMPLETION_RATE(true, 0.02, 3L) {
-            @Override double value(RunRecord run) { return run.engineeringTaskCompletionRate(); }
-            @Override long samples(RunRecord run) { return run.engineeringClaims(); }
+            @Override double value(RunSample run) { return run.engineeringTaskCompletionRate(); }
+            @Override long samples(RunSample run) { return run.engineeringClaims(); }
         };
 
         private final boolean higherIsBetter;
@@ -76,8 +74,58 @@ public final class SwarmAiExperienceTransfer {
             this.minimumSamples = minimumSamples;
         }
 
-        abstract double value(RunRecord run);
-        abstract long samples(RunRecord run);
+        abstract double value(RunSample run);
+        abstract long samples(RunSample run);
+    }
+
+    /**
+     * Lightweight immutable projection of aggregate fields used by transfer analysis.
+     * It intentionally has no Minecraft or persistence-layer dependency.
+     */
+    public record RunSample(
+            long id,
+            long gameTick,
+            String preset,
+            int seed,
+            long elapsedTicks,
+            int agentCount,
+            long communicationDelivered,
+            long communicationDropped,
+            long recoveryAttempts,
+            long recoveryFailures,
+            long searchSucceeded,
+            long searchFailed,
+            long searchReacquisitionTicks,
+            long engineeringClaims,
+            long engineeringCompleted
+    ) {
+        public RunSample {
+            preset = preset == null ? "" : preset;
+        }
+
+        public double communicationDropRate() {
+            return ratio(communicationDropped, communicationDelivered + communicationDropped);
+        }
+
+        public double recoveryFailureRate() {
+            return ratio(recoveryFailures, recoveryAttempts);
+        }
+
+        public double searchSuccessRate() {
+            return ratio(searchSucceeded, searchSucceeded + searchFailed);
+        }
+
+        public double averageReacquisitionTicks() {
+            return searchSucceeded <= 0L ? 0.0 : (double) searchReacquisitionTicks / searchSucceeded;
+        }
+
+        public double engineeringTaskCompletionRate() {
+            return ratio(engineeringCompleted, engineeringClaims);
+        }
+    }
+
+    private static double ratio(long numerator, long denominator) {
+        return denominator <= 0L ? 0.0 : (double) numerator / denominator;
     }
 
     public record Insight(
@@ -118,12 +166,12 @@ public final class SwarmAiExperienceTransfer {
         }
     }
 
-    public static List<Insight> analyze(List<RunRecord> source) {
+    public static List<Insight> analyze(List<RunSample> source) {
         if (source == null || source.size() < 2) {
             return List.of();
         }
 
-        List<RunRecord> runs = source.stream().filter(Objects::nonNull).toList();
+        List<RunSample> runs = source.stream().filter(Objects::nonNull).toList();
         List<Insight> insights = new ArrayList<>();
 
         for (Comparison comparison : COMPARISONS) {
@@ -214,9 +262,9 @@ public final class SwarmAiExperienceTransfer {
         return List.copyOf(insights.subList(0, Math.min(MAX_INSIGHTS, insights.size())));
     }
 
-    private static List<RunPair> matchPairs(List<RunRecord> runs, Comparison comparison) {
-        Map<Integer, List<RunRecord>> bySeed = new HashMap<>();
-        for (RunRecord run : runs) {
+    private static List<RunPair> matchPairs(List<RunSample> runs, Comparison comparison) {
+        Map<Integer, List<RunSample>> bySeed = new HashMap<>();
+        for (RunSample run : runs) {
             if (run.elapsedTicks() < 200L || run.agentCount() <= 0) {
                 continue;
             }
@@ -231,18 +279,18 @@ public final class SwarmAiExperienceTransfer {
         List<RunPair> result = new ArrayList<>();
 
         for (int seed : seeds) {
-            List<RunRecord> controls = bySeed.get(seed).stream()
+            List<RunSample> controls = bySeed.get(seed).stream()
                     .filter(run -> comparison.controlPreset().equals(run.preset()))
                     .toList();
-            List<RunRecord> treatments = bySeed.get(seed).stream()
+            List<RunSample> treatments = bySeed.get(seed).stream()
                     .filter(run -> comparison.treatmentPreset().equals(run.preset()))
                     .toList();
 
             RunPair best = null;
             double bestDistance = Double.MAX_VALUE;
             long bestRecency = Long.MIN_VALUE;
-            for (RunRecord control : controls) {
-                for (RunRecord treatment : treatments) {
+            for (RunSample control : controls) {
+                for (RunSample treatment : treatments) {
                     if (!comparable(control, treatment)) {
                         continue;
                     }
@@ -266,7 +314,7 @@ public final class SwarmAiExperienceTransfer {
         return List.copyOf(result);
     }
 
-    private static boolean comparable(RunRecord first, RunRecord second) {
+    private static boolean comparable(RunSample first, RunSample second) {
         double agentMismatch = (double) Math.abs(first.agentCount() - second.agentCount())
                 / Math.max(first.agentCount(), second.agentCount());
         double durationMismatch = (double) Math.abs(first.elapsedTicks() - second.elapsedTicks())
@@ -275,7 +323,7 @@ public final class SwarmAiExperienceTransfer {
                 && durationMismatch <= MAX_DURATION_MISMATCH;
     }
 
-    private static double mismatch(RunRecord first, RunRecord second) {
+    private static double mismatch(RunSample first, RunSample second) {
         double agentMismatch = (double) Math.abs(first.agentCount() - second.agentCount())
                 / Math.max(first.agentCount(), second.agentCount());
         double durationMismatch = (double) Math.abs(first.elapsedTicks() - second.elapsedTicks())
@@ -315,7 +363,7 @@ public final class SwarmAiExperienceTransfer {
     }
 
     private record Comparison(String factor, String controlPreset, String treatmentPreset) {}
-    private record RunPair(RunRecord control, RunRecord treatment) {}
+    private record RunPair(RunSample control, RunSample treatment) {}
     private record Observation(
             RunPair pair,
             double controlValue,
