@@ -149,5 +149,5 @@ Runtime GameTests now verify actual vanilla melee damage from both Zombies and S
 - Zombie carriers show pickup and successful Nest Core delivery cues; Spider scouts signal only after publishing valid reports.
 - Task changes emit small role/task-specific cues. Skeleton bow pose and Creeper fuse animation remain native vanilla behavior.
 - No GeckoLib dependency or renderer replacement is introduced; deterministic AI and vanilla combat/navigation ownership remain unchanged.
-- Unit tests cover task memory snapshots, NBT round-trip, schema rejection and offline-time handling.
+- Unit tests cover task memory snapshots, experience-vector encode/decode, schema rejection, value bounds and offline-time handling.
 - Architecture notes: `docs/AGENT_MEMORY_AND_ACTIONS.md`.
