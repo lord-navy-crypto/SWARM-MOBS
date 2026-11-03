@@ -42,6 +42,17 @@ class OllamaClientTest {
                 () -> OllamaClient.localApiUri("file://localhost/tmp", "/api/chat")
         );
     }
+    @Test
+    void rejectsBaseUrlsWithQueryOrFragment() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> OllamaClient.localApiUri("http://localhost:11434?token=abc", "/api/tags")
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> OllamaClient.localApiUri("http://localhost:11434#fragment", "/api/tags")
+        );
+    }
 
     @Test
     void parsesOllamaVersion() {
