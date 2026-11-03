@@ -73,43 +73,55 @@ public final class OllamaStrategyProvider implements SwarmStrategyProvider {
     }
 
     public CompletableFuture<OllamaClient.Discovery> discover() {
-        return client.discover(
-                SwarmConfig.OLLAMA_BASE_URL.get(),
-                SwarmConfig.OLLAMA_TIMEOUT_MS.get()
-        );
+        try {
+            return client.discover(
+                    SwarmConfig.OLLAMA_BASE_URL.get(),
+                    SwarmConfig.OLLAMA_TIMEOUT_MS.get()
+            );
+        } catch (RuntimeException error) {
+            return CompletableFuture.failedFuture(error);
+        }
     }
 
     @Override
     public CompletableFuture<List<String>> listModels() {
-        return client.listModels(
-                SwarmConfig.OLLAMA_BASE_URL.get(),
-                SwarmConfig.OLLAMA_TIMEOUT_MS.get()
-        );
+        try {
+            return client.listModels(
+                    SwarmConfig.OLLAMA_BASE_URL.get(),
+                    SwarmConfig.OLLAMA_TIMEOUT_MS.get()
+            );
+        } catch (RuntimeException error) {
+            return CompletableFuture.failedFuture(error);
+        }
     }
 
     @Override
     public CompletableFuture<SwarmStrategyDecision> decide(SwarmStrategyRequest request) {
-        String model = SwarmConfig.OLLAMA_MODEL.get();
-        String userPrompt = """
-                Select one high-level shadow recommendation for this aggregate swarm state.
+        try {
+            String model = SwarmConfig.OLLAMA_MODEL.get();
+            String userPrompt = """
+                    Select one high-level shadow recommendation for this aggregate swarm state.
 
-                Snapshot JSON:
-                %s
+                    Snapshot JSON:
+                    %s
 
-                This is SHADOW MODE. The recommendation will be recorded and displayed only.
-                Return a JSON object matching the provided schema.
-                """.formatted(GSON.toJson(request));
+                    This is SHADOW MODE. The recommendation will be recorded and displayed only.
+                    Return a JSON object matching the provided schema.
+                    """.formatted(GSON.toJson(request));
 
-        return client.chatStructured(
-                        SwarmConfig.OLLAMA_BASE_URL.get(),
-                        model,
-                        SYSTEM_PROMPT,
-                        userPrompt,
-                        DECISION_SCHEMA,
-                        SwarmConfig.OLLAMA_TIMEOUT_MS.get(),
-                        SwarmConfig.OLLAMA_KEEP_ALIVE.get()
-                )
-                .thenApply(this::parseDecision);
+            return client.chatStructured(
+                            SwarmConfig.OLLAMA_BASE_URL.get(),
+                            model,
+                            SYSTEM_PROMPT,
+                            userPrompt,
+                            DECISION_SCHEMA,
+                            SwarmConfig.OLLAMA_TIMEOUT_MS.get(),
+                            SwarmConfig.OLLAMA_KEEP_ALIVE.get()
+                    )
+                    .thenApply(this::parseDecision);
+        } catch (RuntimeException error) {
+            return CompletableFuture.failedFuture(error);
+        }
     }
 
     private SwarmStrategyDecision parseDecision(String content) {
