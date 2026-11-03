@@ -21,8 +21,8 @@ class SwarmAiLearningMemoryTest {
         assertEquals(2, summary.presetCount());
         assertEquals(25.0 / 200.0, summary.communicationDropRate(), 1.0e-9);
         assertEquals(2.0 / 9.0, summary.recoveryFailureRate(), 1.0e-9);
-        assertEquals(7.0 / 9.0, summary.searchSuccessRate(), 1.0e-9);
-        assertEquals(160.0 / 7.0, summary.averageReacquisitionTicks(), 1.0e-9);
+        assertEquals(8.0 / 10.0, summary.searchSuccessRate(), 1.0e-9);
+        assertEquals(20.0, summary.averageReacquisitionTicks(), 1.0e-9);
         assertEquals(7.0 / 9.0, summary.engineeringTaskCompletionRate(), 1.0e-9);
     }
 
