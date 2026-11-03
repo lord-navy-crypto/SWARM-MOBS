@@ -3,7 +3,7 @@ package dev.swarmmobs.agent;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 
-import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -15,8 +15,7 @@ import java.util.Map;
  */
 public final class SwarmAgentMemory {
     public static final String DATA_KEY = "SwarmMobsAgentMemory";
-    public static final int SCHEMA_VERSION = 1;
-    public static final int SAVE_INTERVAL_TICKS = 200;
+    public static final int SCHEMA_VERSION = SwarmAgentMemoryPolicy.SCHEMA_VERSION;
 
     public static boolean restore(
             CompoundTag entityData,
@@ -35,12 +34,14 @@ public final class SwarmAgentMemory {
         }
 
         CompoundTag experienceTag = memory.getCompound("taskExperience");
-        EnumMap<SwarmTaskType, Double> experience = new EnumMap<>(SwarmTaskType.class);
+        Map<String, Double> encoded = new LinkedHashMap<>();
         for (SwarmTaskType task : SwarmTaskType.values()) {
             if (experienceTag.contains(task.name(), Tag.TAG_DOUBLE)) {
-                experience.put(task, experienceTag.getDouble(task.name()));
+                encoded.put(task.name(), experienceTag.getDouble(task.name()));
             }
         }
+        Map<SwarmTaskType, Double> experience =
+                SwarmAgentMemoryPolicy.decode(SCHEMA_VERSION, encoded);
 
         state.restoreTaskExperience(experience, currentGameTick);
         return !experience.isEmpty();
@@ -57,11 +58,10 @@ public final class SwarmAgentMemory {
         }
 
         CompoundTag experienceTag = new CompoundTag();
-        for (Map.Entry<SwarmTaskType, Double> entry : state.taskExperienceSnapshot().entrySet()) {
-            double value = entry.getValue() == null ? 0.0 : entry.getValue();
-            if (Double.isFinite(value) && value > 0.0001) {
-                experienceTag.putDouble(entry.getKey().name(), Math.max(0.0, Math.min(1.0, value)));
-            }
+        Map<String, Double> encoded =
+                SwarmAgentMemoryPolicy.encode(state.taskExperienceSnapshot());
+        for (Map.Entry<String, Double> entry : encoded.entrySet()) {
+            experienceTag.putDouble(entry.getKey(), entry.getValue());
         }
 
         if (experienceTag.isEmpty()) {
@@ -79,8 +79,7 @@ public final class SwarmAgentMemory {
 
     /** Deterministic phase spreading avoids writing every mob's NBT on the same tick. */
     public static boolean shouldPersist(long gameTick, int entityIdHash) {
-        return Math.floorMod(gameTick, SAVE_INTERVAL_TICKS)
-                == Math.floorMod(entityIdHash, SAVE_INTERVAL_TICKS);
+        return SwarmAgentMemoryPolicy.shouldPersist(gameTick, entityIdHash);
     }
 
     private SwarmAgentMemory() {}
