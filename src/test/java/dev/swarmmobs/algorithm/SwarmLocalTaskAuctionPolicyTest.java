@@ -133,6 +133,25 @@ class SwarmLocalTaskAuctionPolicyTest {
     }
 
     @Test
+    void taskSwitchLockedIncumbentKeepsItsAssignmentAndCapacity() {
+        var lockedEngineer = new SwarmLocalTaskAuctionPolicy.Member(
+                A, SwarmAgentArchetype.ASSAULT, SwarmTaskType.ENGINEERING,
+                Map.of(), 0.0, false, true);
+        var result = SwarmLocalTaskAuctionPolicy.allocate(List.of(
+                lockedEngineer,
+                member(B, SwarmAgentArchetype.ASSAULT, SwarmTaskType.RESERVE, 0.0)
+        ), task -> switch (task) {
+            case ENGINEERING -> 0.0;
+            case FLANK -> 1.0;
+            case RESERVE -> 0.30;
+            default -> 0.0;
+        });
+
+        assertEquals(SwarmTaskType.ENGINEERING, result.assignment(A).task());
+        assertNotEquals(SwarmTaskType.ENGINEERING, result.assignment(B).task());
+    }
+
+    @Test
     void noEligibleSpecializedBidFallsBackToReserve() {
         var result = SwarmLocalTaskAuctionPolicy.allocate(List.of(
                 member(A, SwarmAgentArchetype.ASSAULT, SwarmTaskType.RESERVE, 0.0)

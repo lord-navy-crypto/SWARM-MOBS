@@ -167,6 +167,7 @@ public final class SwarmAgentState {
             new EnumMap<>(SwarmTaskType.class);
     private long lastTaskAssignmentTick = Long.MIN_VALUE;
     private SwarmTaskType taskAtTickStart = SwarmTaskType.RESERVE;
+    private long specializationSinceTickAtTickStart = Long.MIN_VALUE;
     private long localTaskAuctionRounds;
     private long localTaskAuctionAssignments;
 
@@ -724,6 +725,16 @@ public final class SwarmAgentState {
         return lastTaskAssignmentTick == gameTick ? taskAtTickStart : currentTask;
     }
 
+    public boolean taskSwitchLockedAtStartOfTick(long gameTick, int minHoldTicks) {
+        long since = lastTaskAssignmentTick == gameTick
+                ? specializationSinceTickAtTickStart
+                : specializationSinceTick;
+        int hold = Math.max(0, minHoldTicks);
+        return since != Long.MIN_VALUE
+                && gameTick >= since
+                && gameTick - since < hold;
+    }
+
     public SwarmSpecialization specialization() {
         return specialization;
     }
@@ -755,6 +766,7 @@ public final class SwarmAgentState {
     private void captureTaskAssignmentSnapshot(long gameTick) {
         if (lastTaskAssignmentTick != gameTick) {
             taskAtTickStart = currentTask;
+            specializationSinceTickAtTickStart = specializationSinceTick;
             lastTaskAssignmentTick = gameTick;
         }
     }
@@ -797,7 +809,7 @@ public final class SwarmAgentState {
         int hold = Math.max(0, minHoldTicks);
 
         if (specializationSinceTick == Long.MIN_VALUE) {
-            if (nextTask != currentTask) captureTaskAssignmentSnapshot(gameTick);
+            captureTaskAssignmentSnapshot(gameTick);
             currentTask = nextTask;
             specialization = nextSpecialization;
             specializationSinceTick = gameTick;
@@ -812,7 +824,9 @@ public final class SwarmAgentState {
             return specialization;
         }
 
-        if (nextTask != currentTask) captureTaskAssignmentSnapshot(gameTick);
+        if (nextTask != currentTask || nextSpecialization != specialization) {
+            captureTaskAssignmentSnapshot(gameTick);
+        }
         currentTask = nextTask;
         specialization = nextSpecialization;
         specializationSinceTick = gameTick;
@@ -830,6 +844,7 @@ public final class SwarmAgentState {
         if (currentTask != SwarmTaskType.RESERVE) {
             captureTaskAssignmentSnapshot(gameTick);
         }
+        specializationSinceTickAtTickStart = Long.MIN_VALUE;
         resetActiveSpecialization();
     }
 

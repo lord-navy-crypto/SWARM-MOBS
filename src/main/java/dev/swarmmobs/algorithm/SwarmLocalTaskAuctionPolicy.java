@@ -33,8 +33,21 @@ public final class SwarmLocalTaskAuctionPolicy {
             SwarmTaskType currentTask,
             Map<SwarmTaskType, Double> experienceByTask,
             double normalizedDistance,
-            boolean combatBusy
+            boolean combatBusy,
+            boolean taskSwitchLocked
     ) {
+        public Member(
+                UUID entityId,
+                SwarmAgentArchetype archetype,
+                SwarmTaskType currentTask,
+                Map<SwarmTaskType, Double> experienceByTask,
+                double normalizedDistance,
+                boolean combatBusy
+        ) {
+            this(entityId, archetype, currentTask, experienceByTask,
+                    normalizedDistance, combatBusy, false);
+        }
+
         public Member {
             currentTask = currentTask == null ? SwarmTaskType.RESERVE : currentTask;
             experienceByTask = experienceByTask == null
@@ -101,11 +114,14 @@ public final class SwarmLocalTaskAuctionPolicy {
 
         Map<UUID, Assignment> assignments = new LinkedHashMap<>();
         Map<UUID, Double> reserveUtility = new HashMap<>();
+        Set<UUID> lockedMembers = new HashSet<>();
+        EnumMap<SwarmTaskType, Integer> lockedOccupancy = new EnumMap<>(SwarmTaskType.class);
+        double reserveDemand = clamp01(demandProvider.applyAsDouble(SwarmTaskType.RESERVE));
         for (Member member : members) {
-            SwarmTaskBidPolicy.Candidate candidate = candidate(member, SwarmTaskType.RESERVE);
-            double reserveDemand = clamp01(demandProvider.applyAsDouble(SwarmTaskType.RESERVE));
+            SwarmTaskBidPolicy.Candidate reserveCandidate =
+                    candidate(member, SwarmTaskType.RESERVE);
             SwarmTaskBidPolicy.Bid reserveBid = SwarmTaskBidPolicy.bid(
-                    candidate, SwarmTaskType.RESERVE, reserveDemand);
+                    reserveCandidate, SwarmTaskType.RESERVE, reserveDemand);
             double utility = Double.isFinite(reserveBid.utility())
                     ? reserveBid.utility() : 0.0;
             reserveUtility.put(member.entityId(), utility);
@@ -119,6 +135,32 @@ public final class SwarmLocalTaskAuctionPolicy {
                             SwarmTaskBidPolicy.capability(
                                     member.archetype(), SwarmTaskType.RESERVE))
             ));
+
+            if (member.taskSwitchLocked()) {
+                lockedMembers.add(member.entityId());
+                if (member.currentTask() != SwarmTaskType.RESERVE) {
+                    double heldDemand = clamp01(
+                            demandProvider.applyAsDouble(member.currentTask()));
+                    SwarmTaskBidPolicy.Bid heldBid = SwarmTaskBidPolicy.bid(
+                            candidate(member, member.currentTask()),
+                            member.currentTask(),
+                            heldDemand
+                    );
+                    double heldUtility = Double.isFinite(heldBid.utility())
+                            ? heldBid.utility() : 0.0;
+                    assignments.put(member.entityId(), new Assignment(
+                            member.currentTask(),
+                            heldUtility,
+                            heldDemand,
+                            SwarmTaskBidPolicy.responseThreshold(
+                                    member.entityId(),
+                                    member.currentTask(),
+                                    SwarmTaskBidPolicy.capability(
+                                            member.archetype(), member.currentTask()))
+                    ));
+                    lockedOccupancy.merge(member.currentTask(), 1, Integer::sum);
+                }
+            }
         }
 
         List<Edge> edges = new ArrayList<>();
@@ -134,11 +176,14 @@ public final class SwarmLocalTaskAuctionPolicy {
                     .filter(member -> SwarmTaskSaturationPolicy.isNativeCoreTask(
                             member.archetype(), task))
                     .count();
-            int taskCapacity = Math.min(groupSize, Math.max(desired, nativeCoreMembers));
+            int lockedIncumbents = lockedOccupancy.getOrDefault(task, 0);
+            int taskCapacity = Math.min(
+                    groupSize, Math.max(Math.max(desired, nativeCoreMembers), lockedIncumbents));
             capacity.put(task, taskCapacity);
 
             int currentOccupancy = occupancy.getOrDefault(task, 0);
             for (Member member : members) {
+                if (lockedMembers.contains(member.entityId())) continue;
                 int otherOccupancy = currentOccupancy
                         - (member.currentTask() == task ? 1 : 0);
                 double adjustedDemand = SwarmTaskSaturationPolicy.adjustedDemand(
@@ -174,8 +219,10 @@ public final class SwarmLocalTaskAuctionPolicy {
                 .thenComparingInt(edge -> edge.task().ordinal())
                 .thenComparing(edge -> edge.entityId().toString()));
 
-        Set<UUID> assignedMembers = new HashSet<>();
-        EnumMap<SwarmTaskType, Integer> usedCapacity = new EnumMap<>(SwarmTaskType.class);
+        Set<UUID> assignedMembers = new HashSet<>(lockedMembers);
+        EnumMap<SwarmTaskType, Integer> usedCapacity =
+                new EnumMap<>(SwarmTaskType.class);
+        usedCapacity.putAll(lockedOccupancy);
         for (Edge edge : edges) {
             if (assignedMembers.contains(edge.entityId())) continue;
             int limit = capacity.getOrDefault(edge.task(), 0);

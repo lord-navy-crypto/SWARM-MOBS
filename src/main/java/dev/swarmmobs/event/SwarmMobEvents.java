@@ -1286,7 +1286,10 @@ public final class SwarmMobEvents {
                 state.taskAtStartOfTick(currentGameTick),
                 experience,
                 normalizedDistance,
-                combatBusy
+                combatBusy,
+                state.taskSwitchLockedAtStartOfTick(
+                        currentGameTick,
+                        SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.get())
         );
     }
 
