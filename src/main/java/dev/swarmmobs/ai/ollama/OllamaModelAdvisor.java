@@ -21,6 +21,7 @@ public final class OllamaModelAdvisor {
         }
 
         return models.stream()
+                .filter(model -> !isEmbeddingOnly(model))
                 .map(OllamaModelAdvisor::rate)
                 .sorted(Comparator.comparingInt(Recommendation::score).reversed()
                         .thenComparing(value -> value.model().name(), String.CASE_INSENSITIVE_ORDER))
@@ -63,16 +64,23 @@ public final class OllamaModelAdvisor {
 
         List<Recommendation> recommendations = recommend(discovery.models());
         if (!recommendations.isEmpty()) {
-            lines.add("Recommended local candidates (metadata heuristic, not a performance benchmark):");
+            lines.add("Recommended general-purpose local candidates (metadata heuristic, not a performance benchmark):");
             for (int index = 0; index < recommendations.size(); index++) {
                 Recommendation recommendation = recommendations.get(index);
                 lines.add((index + 1) + ". " + recommendation.model().name()
                         + " [score " + recommendation.score() + "]: " + recommendation.rationale() + ".");
             }
+        } else if (!discovery.models().isEmpty()) {
+            lines.add("No general-purpose chat candidate was identified; installed models may be embedding/reranking models.");
         }
 
         lines.add("No model was downloaded, started, or selected automatically; no RAM/GPU benchmark was run.");
         return List.copyOf(lines);
+    }
+
+    private static boolean isEmbeddingOnly(ModelInfo model) {
+        String combined = (model.name() + " " + model.family()).toLowerCase(Locale.ROOT);
+        return containsAny(combined, "embedding", "embed", "rerank", "reranker", "bge-", "e5-");
     }
 
     private static Recommendation rate(ModelInfo model) {
