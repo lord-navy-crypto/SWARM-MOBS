@@ -40,7 +40,7 @@ public record SwarmAiEvaluation(
         public Finding sanitized() {
             String safeMetric = normalize(metric, METRICS, "OTHER");
             String safeTrend = normalize(trend, TRENDS, "INSUFFICIENT_DATA");
-            return new Finding(safeMetric, safeText(evidence, 180));
+            return new Finding(safeMetric, safeTrend, safeText(evidence, 180));
         }
     }
 
