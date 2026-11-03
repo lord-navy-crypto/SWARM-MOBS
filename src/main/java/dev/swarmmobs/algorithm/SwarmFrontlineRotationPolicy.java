@@ -58,6 +58,14 @@ public final class SwarmFrontlineRotationPolicy {
             return unchanged;
         }
 
+        boolean leftCovered = unique.values().stream()
+                .anyMatch(member -> member.role() == SwarmRole.FLANK_LEFT);
+        boolean rightCovered = unique.values().stream()
+                .anyMatch(member -> member.role() == SwarmRole.FLANK_RIGHT);
+        // A reserve is eligible only after both local flank duties are covered.
+        // Otherwise it may be the only member available to fill a missing side.
+        if (!leftCovered || !rightCovered) return unchanged;
+
         Member frontliner = unique.values().stream()
                 .filter(member -> member.archetype() == SwarmAgentArchetype.ASSAULT
                         && member.role() == SwarmRole.CHASER
