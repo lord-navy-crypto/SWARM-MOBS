@@ -14,6 +14,7 @@ import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.algorithm.SwarmEngagementPolicy;
 import dev.swarmmobs.data.SwarmAttachments;
 import dev.swarmmobs.registry.SwarmNestBlocks;
+import dev.swarmmobs.visual.SwarmActionVisuals;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -182,6 +183,7 @@ public final class SwarmSpiderColonyScoutGoal extends Goal {
                 }
             }
         }
+        SwarmActionVisuals.scoutSignal(level, spider, marked);
         home = null;
     }
 
