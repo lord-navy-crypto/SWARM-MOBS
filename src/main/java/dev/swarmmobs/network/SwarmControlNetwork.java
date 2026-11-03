@@ -13,11 +13,14 @@ import dev.swarmmobs.ai.SwarmPlayerStyleRegistry;
 import dev.swarmmobs.ai.SwarmPlayerMotionRegistry;
 import dev.swarmmobs.data.SwarmAttachments;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.animal.Bee;
 import java.util.EnumMap;
 import dev.swarmmobs.ai.SwarmAiShadowService;
 import dev.swarmmobs.ai.SwarmAiShadowState;
+import dev.swarmmobs.ai.SwarmAiLearningMemory;
+import dev.swarmmobs.ai.SwarmAiLearningService;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.colony.SwarmNestScienceTelemetry;
 import dev.swarmmobs.experiment.SwarmExperimentManager;
@@ -280,6 +283,47 @@ public final class SwarmControlNetwork {
                     );
             case "ai_refresh" -> {
                 // Snapshot is returned by the normal server-authoritative refresh below.
+            }
+            case "experiment_record" -> {
+                try {
+                    var metrics = SwarmExperimentMetrics.snapshot(player.serverLevel());
+                    var record = SwarmAiLearningMemory.get(player.serverLevel()).record(
+                            metrics,
+                            SwarmExperimentManager.activePreset().name(),
+                            SwarmExperimentManager.experimentSeed(),
+                            player.serverLevel().getGameTime()
+                    );
+                    player.sendSystemMessage(Component.literal(
+                            "Saved experiment #" + record.id() + " (" + record.preset()
+                                    + ", " + record.elapsedTicks() + " ticks)."
+                    ));
+                } catch (IllegalStateException exception) {
+                    player.sendSystemMessage(Component.literal(
+                            "Experiment snapshot not saved: " + exception.getMessage()
+                    ));
+                }
+            }
+            case "ai_evaluate" -> {
+                player.sendSystemMessage(Component.literal(
+                        "Ollama experiment evaluation started; gameplay remains deterministic."
+                ));
+                SwarmAiLearningService.evaluate(player.serverLevel()).whenComplete((evaluation, error) ->
+                        player.serverLevel().getServer().execute(() -> {
+                            if (player.isAlive()) {
+                                if (error != null) {
+                                    player.sendSystemMessage(Component.literal(
+                                            "Experiment evaluation failed: " + error.getMessage()
+                                    ));
+                                } else {
+                                    player.sendSystemMessage(Component.literal(
+                                            "Evaluation (" + evaluation.confidence() + "): "
+                                                    + evaluation.summary()
+                                    ));
+                                }
+                                sendSnapshot(player);
+                            }
+                        })
+                );
             }
 
             case "preset_baseline" -> SwarmExperimentManager.apply(SwarmExperimentPreset.BASELINE);
@@ -804,6 +848,9 @@ public final class SwarmControlNetwork {
         var ai = SwarmAiShadowState.snapshot();
         var decision = ai.lastDecision();
         var activeAi = SwarmAiActiveState.snapshot(level.getGameTime());
+        var learningMemory = SwarmAiLearningMemory.get(level);
+        var learningSummary = learningMemory.summary();
+        var lastEvaluation = learningMemory.lastEvaluation();
         var playerLearning = SwarmPlayerStyleRegistry.summary(level, level.getGameTime());
         var playerMotion = SwarmPlayerMotionRegistry.summary(level, level.getGameTime());
         boolean masterEnabled = SwarmConfig.ENABLED.get();
@@ -1198,6 +1245,16 @@ public final class SwarmControlNetwork {
                                 activeAi.expiresTick() - level.getGameTime()
                         )
                         : 0),
+                pair("aiMemoryRuns", learningSummary.runCount()),
+                pair("aiMemoryPresets", learningSummary.presetCount()),
+                pair("aiLearningInFlight", SwarmAiLearningService.requestInFlight()),
+                pair("aiMemorySearchSuccess", learningSummary.searchSuccessRate()),
+                pair("aiMemoryRecoveryFailure", learningSummary.recoveryFailureRate()),
+                pair("aiMemoryCommDrop", learningSummary.communicationDropRate()),
+                pair("aiLastEvaluationConfidence", lastEvaluation == null
+                        ? "NONE" : lastEvaluation.evaluation().confidence().name()),
+                pair("aiLastEvaluation", lastEvaluation == null
+                        ? "No saved evaluation" : lastEvaluation.evaluation().summary()),
                 "activePreset=" + SwarmExperimentManager.activePreset().name(),
                 pair("experimentSeed", SwarmExperimentManager.experimentSeed()),
                 pair("experimentActive", metrics.active()),

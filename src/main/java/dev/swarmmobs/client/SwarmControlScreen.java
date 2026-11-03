@@ -539,7 +539,47 @@ public final class SwarmControlScreen extends Screen {
                             }
                     ).bounds(leftX, y, 620, 20).build()
             );
+            y += 26;
         }
+
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal(
+                                "Saved experiments=" + (int) number("aiMemoryRuns")
+                                        + " | presets=" + (int) number("aiMemoryPresets")
+                                        + " | evaluation=" + values.getOrDefault("aiLastEvaluationConfidence", "NONE")
+                        ),
+                        button -> {
+                        }
+                ).bounds(leftX, y, 620, 20).build()
+        );
+        y += 26;
+
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal("Record Experiment Snapshot"),
+                        button -> SwarmControlClient.sendAction("experiment_record", 0.0)
+                ).bounds(leftX, y, 300, 20).build()
+        );
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal("Evaluate Saved Experiments"),
+                        button -> SwarmControlClient.sendAction("ai_evaluate", 0.0)
+                ).bounds(rightX, y, 300, 20).build()
+        );
+        y += 26;
+
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal(
+                                "Latest evaluation: " + abbreviate(
+                                        values.getOrDefault("aiLastEvaluation", "No saved evaluation"), 90
+                                )
+                        ),
+                        button -> {
+                        }
+                ).bounds(leftX, y, 620, 20).build()
+        );
     }
 
     private void buildExperiment() {
