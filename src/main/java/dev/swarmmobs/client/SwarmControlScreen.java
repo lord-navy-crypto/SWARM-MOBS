@@ -580,6 +580,14 @@ public final class SwarmControlScreen extends Screen {
                         }
                 ).bounds(leftX, y, 620, 20).build()
         );
+        y += 26;
+
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal("Review Cross-Experiment Transfer Evidence"),
+                        button -> SwarmControlClient.sendAction("ai_transfer", 0.0)
+                ).bounds(leftX, y, 620, 20).build()
+        );
     }
 
     private void buildExperiment() {

@@ -217,6 +217,8 @@ public final class SwarmCommands {
                         .executes(context -> aiMemory(context.getSource())))
                 .then(Commands.literal("history")
                         .executes(context -> aiHistory(context.getSource())))
+                .then(Commands.literal("transfer")
+                        .executes(context -> aiTransfer(context.getSource())))
                 .then(Commands.literal("evaluate")
                         .executes(context -> runAiEvaluation(context.getSource())))
                 .then(Commands.literal("active")
@@ -524,6 +526,25 @@ public final class SwarmCommands {
                     )),
                     false
             );
+        }
+        return 1;
+    }
+
+    private static int aiTransfer(CommandSourceStack source) {
+        var insights = SwarmAiLearningMemory.get(source.getLevel()).experienceTransfer();
+        if (insights.isEmpty()) {
+            source.sendSuccess(() -> Component.literal(
+                    "No matched cross-experiment evidence yet. Repeat a supported preset pair with "
+                            + "the same seed, similar agent count, and similar duration."
+            ), false);
+            return 1;
+        }
+
+        source.sendSuccess(() -> Component.literal(
+                "Cross-experiment transfer evidence (paired associations, not causal proof):"
+        ), false);
+        for (var insight : insights) {
+            source.sendSuccess(() -> Component.literal(insight.displayLine()), false);
         }
         return 1;
     }

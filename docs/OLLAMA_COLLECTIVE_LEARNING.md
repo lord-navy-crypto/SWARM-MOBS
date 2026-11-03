@@ -55,3 +55,35 @@ Timeouts, invalid output, and Ollama outages do not affect deterministic gamepla
 
 No embedding model or additional database is required. The first implementation uses bounded structured world data;
 semantic/vector retrieval can be considered later if the history becomes large enough to justify it.
+
+
+## Phase IV-E — Cross-Experiment Experience Transfer
+
+The transfer layer derives auditable evidence from the existing persistent 40-run ledger. It does not create a second source of truth and does not modify runtime configuration.
+
+### Controlled comparison pairs
+
+Only one-factor preset pairs are compared:
+
+- Sensing: BASELINE vs NOISY_SENSING; LOSSY_COMMS vs COMBINED_FAULTS.
+- Communication: BASELINE vs LOSSY_COMMS; NOISY_SENSING vs COMBINED_FAULTS.
+- Navigation: BASELINE vs NAVIGATION_STRESS.
+
+BASELINE vs COMBINED_FAULTS is intentionally excluded because more than one experimental dimension changes.
+
+### Matching and evidence quality
+
+- Runs must use the same experiment seed and belong to the same world-scoped ledger.
+- Population mismatch must be at most 25%; duration mismatch must be at most 20%.
+- At most one best-matched pair is counted per seed, preventing repeated runs with one seed from masquerading as independent replications.
+- Each metric has its own minimum event denominator before a pair contributes.
+- Effects use the median of paired differences; the report retains control/treatment run IDs, paired-seed count, consistency count, and supporting sample count.
+- MEDIUM confidence requires at least 3 paired seeds, at least 2/3 directional consistency, and 15 supporting events. HIGH requires at least 5 paired seeds, at least 80% consistency, and 40 supporting events. Everything else remains LOW / exploratory.
+
+These are observational associations, not proof of causation. Transfer evidence is advisory and is supplied to Ollama as context; it cannot alter monster behavior or apply configuration changes.
+
+### Access
+
+- /swarmmobs ai transfer
+- AI control-panel button: Review Cross-Experiment Transfer Evidence
+- /swarmmobs ai evaluate now includes deterministic transfer evidence in its Ollama analysis context.

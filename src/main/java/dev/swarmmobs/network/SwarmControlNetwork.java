@@ -326,6 +326,22 @@ public final class SwarmControlNetwork {
                         })
                 );
             }
+            case "ai_transfer" -> {
+                var insights = SwarmAiLearningMemory.get(player.serverLevel()).experienceTransfer();
+                if (insights.isEmpty()) {
+                    player.sendSystemMessage(Component.literal(
+                            "No matched transfer evidence yet. Repeat a supported preset pair with "
+                                    + "the same seed and similar population/duration."
+                    ));
+                } else {
+                    player.sendSystemMessage(Component.literal(
+                            "Cross-experiment transfer evidence (associations, not causal proof):"
+                    ));
+                    for (var insight : insights) {
+                        player.sendSystemMessage(Component.literal(insight.displayLine()));
+                    }
+                }
+            }
 
             case "preset_baseline" -> SwarmExperimentManager.apply(SwarmExperimentPreset.BASELINE);
             case "preset_noisy_sensing" -> SwarmExperimentManager.apply(SwarmExperimentPreset.NOISY_SENSING);

@@ -113,6 +113,15 @@ public final class SwarmAiLearningMemory extends SavedData {
         return List.copyOf(all.subList(start, all.size()));
     }
 
+    /**
+     * Rebuilds auditable transfer evidence from the persisted run ledger.
+     * The evidence is derived rather than separately cached, so it cannot become
+     * stale when the bounded 40-run history rolls forward.
+     */
+    public synchronized List<SwarmAiExperienceTransfer.Insight> experienceTransfer() {
+        return SwarmAiExperienceTransfer.analyze(List.copyOf(runs));
+    }
+
     public synchronized EvaluationEntry lastEvaluation() {
         return lastEvaluation;
     }

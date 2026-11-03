@@ -26,7 +26,7 @@ public final class SwarmAiLearningService {
             Recommend only controlled experiment presets for additional measurement.
             Compare like-for-like presets and seeds when possible. Distinguish correlation from causation.
             Explicitly note small sample sizes, missing denominators, and incomparable runs.
-            Keep findings concise, evidence-based, and technically cautious.
+            Treat LOW-confidence transfer evidence as exploratory only. Never turn correlation into causation.\n            Do not extrapolate a result across unrelated preset dimensions or claim that it changes runtime behavior.\n            Keep findings concise, evidence-based, and technically cautious.
             """;
 
     public static CompletableFuture<SwarmAiEvaluation> evaluate(ServerLevel level) {
@@ -69,8 +69,20 @@ public final class SwarmAiLearningService {
                 Recent experiment records (oldest to newest):
                 %s
 
+                Deterministic cross-experiment transfer evidence:
+                %s
+
+                Transfer evidence is based on same-seed paired runs with bounded population and
+                duration mismatch. Each item includes source run IDs, matched seed count,
+                consistency count, event sample count, confidence, and observed effect.
+                Treat these as associations, not proof of causation. LOW confidence is exploratory.
+
                 Return only the JSON object matching the supplied schema.
-                """.formatted(GSON.toJson(memory.summary()), GSON.toJson(runs));
+                """.formatted(
+                GSON.toJson(memory.summary()),
+                GSON.toJson(runs),
+                GSON.toJson(memory.experienceTransfer())
+        );
 
         CompletableFuture<SwarmAiEvaluation> result = new CompletableFuture<>();
         try {
