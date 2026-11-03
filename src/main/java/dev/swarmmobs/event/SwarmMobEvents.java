@@ -5,6 +5,7 @@ import dev.swarmmobs.agent.SwarmAgentProfile;
 import dev.swarmmobs.agent.SwarmBehaviorMode;
 import dev.swarmmobs.agent.SwarmAgentProfiles;
 import dev.swarmmobs.agent.SwarmAgentState;
+import dev.swarmmobs.agent.SwarmAgentMemory;
 import dev.swarmmobs.agent.SwarmLocalComposition;
 import dev.swarmmobs.agent.SwarmRole;
 import dev.swarmmobs.agent.SwarmSpecialization;
@@ -65,6 +66,7 @@ import dev.swarmmobs.ai.SwarmPlayerMotionRegistry;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.data.SwarmAttachments;
 import dev.swarmmobs.debug.SwarmDebugParticles;
+import dev.swarmmobs.visual.SwarmActionVisuals;
 import dev.swarmmobs.goal.SwarmColonyRallyGoal;
 import dev.swarmmobs.goal.SwarmApproachGoal;
 import dev.swarmmobs.goal.SwarmIdleNestGoal;
@@ -115,6 +117,12 @@ public final class SwarmMobEvents {
                 || !SwarmAgentProfiles.isSupported(mob)) {
             return;
         }
+
+        SwarmAgentMemory.restore(
+                mob.getPersistentData(),
+                mob.getData(SwarmAttachments.AGENT_STATE.get()),
+                mob.level().getGameTime()
+        );
 
         if (mob instanceof Skeleton skeleton) {
             mob.goalSelector.addGoal(0, new SwarmSkeletonBowGoal(skeleton));
@@ -169,6 +177,14 @@ public final class SwarmMobEvents {
         if (mob.isNoAi()) return;
 
         SwarmAgentState state = mob.getData(SwarmAttachments.AGENT_STATE.get());
+        if (SwarmAgentMemory.shouldPersist(gameTick, mob.getUUID().hashCode())) {
+            SwarmAgentMemory.save(
+                    mob.getPersistentData(),
+                    state,
+                    level.dimension().location().toString(),
+                    gameTick
+            );
+        }
         int interval = SwarmConfig.PLAN_INTERVAL_TICKS.get();
 
         if (!state.planningScheduleInitialized()) {
@@ -554,6 +570,7 @@ public final class SwarmMobEvents {
                 );
             }
 
+            SwarmTaskType previousTask = state.currentTask();
             SwarmSpecialization specializationCandidate =
                     SwarmSpecialization.forAssignment(
                             profile.archetype(),
@@ -567,6 +584,9 @@ public final class SwarmMobEvents {
                     gameTick,
                     SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.get()
             );
+            if (previousTask != state.currentTask()) {
+                SwarmActionVisuals.taskChanged(level, mob, state.currentTask());
+            }
 
             state.updateTaskExperience(
                     state.currentTask(),
@@ -580,7 +600,11 @@ public final class SwarmMobEvents {
                     candidateRole
             );
         } else {
+            SwarmTaskType previousTask = state.currentTask();
             state.resetActiveSpecialization(gameTick);
+            if (previousTask != state.currentTask()) {
+                SwarmActionVisuals.taskChanged(level, mob, state.currentTask());
+            }
             state.updateTaskExperience(
                     null,
                     SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get(),
