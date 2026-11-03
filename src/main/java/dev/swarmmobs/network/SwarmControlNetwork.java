@@ -210,6 +210,7 @@ public final class SwarmControlNetwork {
                 SwarmConfig.ENABLED.set(true);
                 SwarmConfig.COMMUNICATION_ENABLED.set(true);
                 SwarmConfig.DIVISION_OF_LABOR_ENABLED.set(true);
+                SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.set(true);
                 SwarmConfig.TARGET_PREDICTION_ENABLED.set(true);
                 SwarmConfig.SUPPORT_POSITION_OPTIMIZATION_ENABLED.set(true);
                 SwarmConfig.NAV_OBSTACLE_AVOIDANCE_ENABLED.set(true);

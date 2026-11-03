@@ -415,7 +415,7 @@ public final class SwarmMobEvents {
             if (!zombieColonyEngineeringEnabled
                     && (state.currentTask() == SwarmTaskType.ENGINEERING
                         || state.currentTask() == SwarmTaskType.MATERIAL)) {
-                state.resetActiveSpecialization();
+                state.resetActiveSpecialization(gameTick);
             }
             boolean routeBlocked = zombieColonyEngineeringEnabled
                     && SwarmEngineeringEscalationPolicy.shouldEscalate(
@@ -443,7 +443,7 @@ public final class SwarmMobEvents {
                     continue;
                 }
                 sameTargetPeers.add(peer);
-                peerTaskOccupancy.merge(peerState.currentTask(), 1, Integer::sum);
+                peerTaskOccupancy.merge(peerState.taskAtStartOfTick(gameTick), 1, Integer::sum);
                 squadConfidence = Math.max(
                         squadConfidence,
                         peerState.targetConfidence(
@@ -490,14 +490,15 @@ public final class SwarmMobEvents {
             if (localTaskAuctionEnabled) {
                 List<SwarmLocalTaskAuctionPolicy.Member> auctionMembers =
                         new ArrayList<>(localGroupSize);
-                auctionMembers.add(taskAuctionMember(mob, state, observation));
+                auctionMembers.add(taskAuctionMember(mob, state, observation, gameTick));
                 for (PathfinderMob peer : sameTargetPeers) {
                     SwarmAgentState peerState =
                             peer.getData(SwarmAttachments.AGENT_STATE.get());
                     auctionMembers.add(taskAuctionMember(
                             peer,
                             peerState,
-                            observation
+                            observation,
+                            gameTick
                     ));
                 }
 
@@ -520,7 +521,7 @@ public final class SwarmMobEvents {
                 state.recordLocalTaskAuction(assignment.task() != SwarmTaskType.RESERVE);
             } else {
                 SwarmLocalTaskAuctionPolicy.Member self =
-                        taskAuctionMember(mob, state, observation);
+                        taskAuctionMember(mob, state, observation, gameTick);
                 boolean combatBusy = self.combatBusy();
                 assignment = SwarmDivisionOfLaborPolicy.choose(
                         mob.getUUID(),
@@ -566,7 +567,7 @@ public final class SwarmMobEvents {
                     candidateRole
             );
         } else {
-            state.resetActiveSpecialization();
+            state.resetActiveSpecialization(gameTick);
         }
 
         // Actual observed Spider coverage determines which flank is vacant.
@@ -1253,12 +1254,13 @@ public final class SwarmMobEvents {
     private static SwarmLocalTaskAuctionPolicy.Member taskAuctionMember(
             PathfinderMob mob,
             SwarmAgentState state,
-            TargetObservation observation
+            TargetObservation observation,
+            long currentGameTick
     ) {
         EnumMap<SwarmTaskType, Double> experience =
                 new EnumMap<>(SwarmTaskType.class);
         for (SwarmTaskType task : SwarmTaskType.values()) {
-            experience.put(task, state.taskExperience(task));
+            experience.put(task, state.taskExperienceAtStartOfTick(task, currentGameTick));
         }
 
         double dx = mob.getX() - observation.x();
@@ -1281,7 +1283,7 @@ public final class SwarmMobEvents {
         return new SwarmLocalTaskAuctionPolicy.Member(
                 mob.getUUID(),
                 SwarmAgentProfiles.profile(mob).archetype(),
-                state.currentTask(),
+                state.taskAtStartOfTick(currentGameTick),
                 experience,
                 normalizedDistance,
                 combatBusy

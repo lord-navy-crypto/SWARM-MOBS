@@ -162,6 +162,11 @@ public final class SwarmAgentState {
     private final EnumMap<SwarmTaskType, Double> taskExperience =
             new EnumMap<>(SwarmTaskType.class);
     private long lastTaskExperienceUpdateTick = Long.MIN_VALUE;
+    private long taskExperienceSnapshotTick = Long.MIN_VALUE;
+    private final EnumMap<SwarmTaskType, Double> taskExperienceAtTickStart =
+            new EnumMap<>(SwarmTaskType.class);
+    private long lastTaskAssignmentTick = Long.MIN_VALUE;
+    private SwarmTaskType taskAtTickStart = SwarmTaskType.RESERVE;
     private long localTaskAuctionRounds;
     private long localTaskAuctionAssignments;
 
@@ -710,6 +715,15 @@ public final class SwarmAgentState {
         return currentTask;
     }
 
+    /**
+     * Stable same-tick view for decentralized auctions. If this agent already
+     * changed task during the current server tick, peers still see the task
+     * it held at the start of that tick.
+     */
+    public SwarmTaskType taskAtStartOfTick(long gameTick) {
+        return lastTaskAssignmentTick == gameTick ? taskAtTickStart : currentTask;
+    }
+
     public SwarmSpecialization specialization() {
         return specialization;
     }
@@ -727,6 +741,32 @@ public final class SwarmAgentState {
             return 0.0;
         }
         return taskExperience.getOrDefault(task, 0.0);
+    }
+
+    /** Same-tick stable view used by all members of a local task auction. */
+    public double taskExperienceAtStartOfTick(SwarmTaskType task, long gameTick) {
+        if (task == null) return 0.0;
+        if (taskExperienceSnapshotTick == gameTick) {
+            return taskExperienceAtTickStart.getOrDefault(task, 0.0);
+        }
+        return taskExperience(task);
+    }
+
+    private void captureTaskAssignmentSnapshot(long gameTick) {
+        if (lastTaskAssignmentTick != gameTick) {
+            taskAtTickStart = currentTask;
+            lastTaskAssignmentTick = gameTick;
+        }
+    }
+
+    private void captureTaskExperienceSnapshot(long gameTick) {
+        if (taskExperienceSnapshotTick != gameTick) {
+            taskExperienceAtTickStart.clear();
+            for (SwarmTaskType task : SwarmTaskType.values()) {
+                taskExperienceAtTickStart.put(task, taskExperience(task));
+            }
+            taskExperienceSnapshotTick = gameTick;
+        }
     }
 
     public long localTaskAuctionRounds() {
@@ -757,6 +797,7 @@ public final class SwarmAgentState {
         int hold = Math.max(0, minHoldTicks);
 
         if (specializationSinceTick == Long.MIN_VALUE) {
+            if (nextTask != currentTask) captureTaskAssignmentSnapshot(gameTick);
             currentTask = nextTask;
             specialization = nextSpecialization;
             specializationSinceTick = gameTick;
@@ -771,6 +812,7 @@ public final class SwarmAgentState {
             return specialization;
         }
 
+        if (nextTask != currentTask) captureTaskAssignmentSnapshot(gameTick);
         currentTask = nextTask;
         specialization = nextSpecialization;
         specializationSinceTick = gameTick;
@@ -784,12 +826,20 @@ public final class SwarmAgentState {
         specializationSinceTick = Long.MIN_VALUE;
     }
 
+    public void resetActiveSpecialization(long gameTick) {
+        if (currentTask != SwarmTaskType.RESERVE) {
+            captureTaskAssignmentSnapshot(gameTick);
+        }
+        resetActiveSpecialization();
+    }
+
     public void updateTaskExperience(
             SwarmTaskType activeTask,
             double gain,
             double decay,
             long gameTick
     ) {
+        captureTaskExperienceSnapshot(gameTick);
         if (lastTaskExperienceUpdateTick == Long.MIN_VALUE
                 || gameTick < lastTaskExperienceUpdateTick) {
             lastTaskExperienceUpdateTick = gameTick;

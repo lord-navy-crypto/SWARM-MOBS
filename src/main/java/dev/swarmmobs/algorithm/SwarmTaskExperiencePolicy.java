@@ -22,7 +22,7 @@ public final class SwarmTaskExperiencePolicy {
 
         long boundedTicks = Math.min(MAX_CATCH_UP_TICKS, elapsedTicks);
         double intervals = boundedTicks / (double) REFERENCE_INTERVAL_TICKS;
-        double gain = clamp(gainPerReferenceInterval, 0.0, 0.25);
+        double gain = clamp(gainPerReferenceInterval, 0.0, 1.0);
         double retention = clamp(retentionPerReferenceInterval, 0.90, 1.0);
         double retentionFactor = Math.pow(retention, intervals);
 
