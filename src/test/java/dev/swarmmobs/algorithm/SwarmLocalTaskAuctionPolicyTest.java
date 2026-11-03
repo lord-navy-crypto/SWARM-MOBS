@@ -120,6 +120,19 @@ class SwarmLocalTaskAuctionPolicyTest {
     }
 
     @Test
+    void nativeCoreMembersAreNotCrowdedOutByGenericTaskHeadcount() {
+        var result = SwarmLocalTaskAuctionPolicy.allocate(List.of(
+                member(A, SwarmAgentArchetype.RANGED_SUPPORT, SwarmTaskType.RANGED_SUPPORT, 0.0),
+                member(B, SwarmAgentArchetype.RANGED_SUPPORT, SwarmTaskType.RANGED_SUPPORT, 0.0),
+                member(C, SwarmAgentArchetype.RANGED_SUPPORT, SwarmTaskType.RANGED_SUPPORT, 0.0),
+                member(D, SwarmAgentArchetype.ASSAULT, SwarmTaskType.RESERVE, 0.0)
+        ), task -> task == SwarmTaskType.RANGED_SUPPORT ? 0.95 : 0.0);
+
+        assertEquals(3, result.assignments().values().stream()
+                .filter(a -> a.task() == SwarmTaskType.RANGED_SUPPORT).count());
+    }
+
+    @Test
     void noEligibleSpecializedBidFallsBackToReserve() {
         var result = SwarmLocalTaskAuctionPolicy.allocate(List.of(
                 member(A, SwarmAgentArchetype.ASSAULT, SwarmTaskType.RESERVE, 0.0)

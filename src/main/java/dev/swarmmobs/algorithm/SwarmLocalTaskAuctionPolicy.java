@@ -130,7 +130,12 @@ public final class SwarmLocalTaskAuctionPolicy {
             int desired = SwarmTaskSaturationPolicy.desiredHeadcount(
                     task, baseDemand, groupSize);
             if (desired <= 0 || baseDemand <= 0.0) continue;
-            capacity.put(task, Math.min(groupSize, desired));
+            int nativeCoreMembers = (int) members.stream()
+                    .filter(member -> SwarmTaskSaturationPolicy.isNativeCoreTask(
+                            member.archetype(), task))
+                    .count();
+            int taskCapacity = Math.min(groupSize, Math.max(desired, nativeCoreMembers));
+            capacity.put(task, taskCapacity);
 
             int currentOccupancy = occupancy.getOrDefault(task, 0);
             for (Member member : members) {

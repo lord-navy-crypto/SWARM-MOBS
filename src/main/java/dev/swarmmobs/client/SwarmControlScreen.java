@@ -304,7 +304,7 @@ public final class SwarmControlScreen extends Screen {
                         + " / " + (int) number("taskReserve"));
         y += 28;
 
-        addNumericRow(leftX, y, "Experience gain",
+        addNumericRow(leftX, y, "Experience gain / 6 ticks",
                 format(number("specializationExperienceGain")),
                 "specialization_gain_delta", 0.005);
         addStatusRow(rightX, y, "Engineer / carrier / scout",
@@ -313,7 +313,7 @@ public final class SwarmControlScreen extends Screen {
                         + " / " + (int) number("specScout"));
         y += 28;
 
-        addNumericRow(leftX, y, "Experience retention",
+        addNumericRow(leftX, y, "Retention / 6 ticks",
                 format(number("specializationExperienceDecay")),
                 "specialization_decay_delta", 0.001);
         addStatusRow(rightX, y, "Interceptor / overwatch",
