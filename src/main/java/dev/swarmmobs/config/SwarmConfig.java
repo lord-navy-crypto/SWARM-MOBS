@@ -147,6 +147,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.ConfigValue<String> OLLAMA_MODEL;
     public static final ModConfigSpec.IntValue OLLAMA_TIMEOUT_MS;
     public static final ModConfigSpec.ConfigValue<String> OLLAMA_KEEP_ALIVE;
+    public static final ModConfigSpec.BooleanValue ACTION_VISUALS_ENABLED;
     public static final ModConfigSpec.BooleanValue PLAYER_LEARNING_ENABLED;
 
     public static final ModConfigSpec SPEC;
@@ -672,6 +673,14 @@ public final class SwarmConfig {
         OLLAMA_KEEP_ALIVE = BUILDER
                 .comment("Ollama keep_alive value used for shadow strategy requests.")
                 .define("ollamaKeepAlive", "5m");
+
+        BUILDER.pop();
+
+        BUILDER.push("visuals");
+
+        ACTION_VISUALS_ENABLED = BUILDER
+                .comment("Show task-linked vanilla arm swings and small particle cues for engineering, hauling, scouting and task changes. Does not change AI decisions or attack timing.")
+                .define("actionVisualsEnabled", true);
 
         BUILDER.pop();
 
