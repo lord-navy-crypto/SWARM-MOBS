@@ -77,7 +77,7 @@ class OllamaClientTest {
 
     @Test
     void returnsEmptyModelListForEmptyTagsResponse() {
-        assertTrue(OllamaClient.parseModelDetails("{\\"models\\":[]}").isEmpty());
+        assertTrue(OllamaClient.parseModelDetails("{\"models\":[]}").isEmpty());
     }
 
 }
