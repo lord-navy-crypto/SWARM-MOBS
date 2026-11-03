@@ -335,6 +335,23 @@ class SwarmAgentStateTest {
         assertEquals(0.0, state.targetConfidence(200L, 100), 1.0e-9);
     }
 
+    @Test
+    void taskExperienceSnapshotRestoresWithoutOfflineDecay() {
+        SwarmAgentState original = new SwarmAgentState();
+        original.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.25, 1.0, 100L);
+        original.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.25, 1.0, 106L);
+        double learned = original.taskExperience(SwarmTaskType.ENGINEERING);
+
+        SwarmAgentState restored = new SwarmAgentState();
+        restored.restoreTaskExperience(original.taskExperienceSnapshot(), 50_000L);
+        assertEquals(learned, restored.taskExperience(SwarmTaskType.ENGINEERING), 1.0e-9);
+        assertEquals(0.0, restored.taskExperience(SwarmTaskType.FLANK), 1.0e-9);
+
+        restored.updateTaskExperience(null, 0.25, 0.95, 50_001L);
+        assertTrue(restored.taskExperience(SwarmTaskType.ENGINEERING) < learned);
+        assertTrue(restored.taskExperience(SwarmTaskType.ENGINEERING) > 0.0);
+    }
+
     private static TargetObservation observation(UUID target, long tick) {
         return new TargetObservation(target, tick, 4.0, 64.0, 8.0, 0.0, 1.0);
     }
