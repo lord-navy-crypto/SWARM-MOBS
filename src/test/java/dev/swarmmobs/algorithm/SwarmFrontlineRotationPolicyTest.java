@@ -107,6 +107,23 @@ class SwarmFrontlineRotationPolicyTest {
     }
 
     @Test
+    void committedFlankWorkerDoesNotCountAsActiveFlankCoverage() {
+        var committedLeft = List.of(
+                member(FRONT, SwarmRole.CHASER, 0.20),
+                member(RESERVE, SwarmRole.REAR_PRESSURE, 0.90),
+                new SwarmFrontlineRotationPolicy.Member(
+                        OTHER, SwarmAgentArchetype.ASSAULT, SwarmRole.FLANK_LEFT,
+                        SwarmTaskType.ENGINEERING, 0.90),
+                member(OTHER_RIGHT, SwarmRole.FLANK_RIGHT, 0.65)
+        );
+
+        assertFalse(SwarmFrontlineRotationPolicy.choose(
+                FRONT, SwarmRole.CHASER, committedLeft, true).rotated());
+        assertFalse(SwarmFrontlineRotationPolicy.choose(
+                RESERVE, SwarmRole.REAR_PRESSURE, committedLeft, true).rotated());
+    }
+
+    @Test
     void missingFlankAssignmentIsNotOverriddenByReservePromotion() {
         var decision = SwarmFrontlineRotationPolicy.choose(
                 RESERVE, SwarmRole.FLANK_RIGHT, roster(), true);
@@ -118,7 +135,8 @@ class SwarmFrontlineRotationPolicyTest {
     @Test
     void rosterOrderDoesNotChangeTheDecisionAndDisabledModeIsBaseline() {
         var original = roster();
-        var reversed = List.of(original.get(2), original.get(1), original.get(0));
+        var reversed = List.of(
+                original.get(3), original.get(2), original.get(1), original.get(0));
 
         assertEquals(
                 SwarmFrontlineRotationPolicy.choose(FRONT, SwarmRole.CHASER, original, true),
