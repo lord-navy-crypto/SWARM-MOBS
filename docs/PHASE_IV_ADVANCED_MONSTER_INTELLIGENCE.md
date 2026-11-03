@@ -32,7 +32,7 @@ Phase IV improves the existing Minecraft swarm controller without replacing vani
 ### Monster frontline rotation
 - Read health fractions only from the already sampled same-target local squad.
 - When the current Zombie CHASER is at or below 35% health, promote a healthy REAR_PRESSURE Zombie at or above 70% health if its health advantage is at least 35 percentage points.
-- Rotate only uncommitted assault members; ENGINEERING/MATERIAL workers and Spider flank assignments are not stolen.
+- Rotate only uncommitted assault members after both local flanks are covered; ENGINEERING/MATERIAL workers and Spider flank assignments are not stolen.
 - The injured member moves to REAR_PRESSURE; the relief member takes CHASER. Existing role hysteresis still applies, with the normal urgent-vacancy hold.
 - The policy changes formation roles only. Vanilla target selection, damage, attacks, projectiles, Creeper fuse, and navigation remain authoritative.
 
