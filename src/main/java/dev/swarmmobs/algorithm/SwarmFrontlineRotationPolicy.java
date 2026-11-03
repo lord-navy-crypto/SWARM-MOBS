@@ -59,9 +59,11 @@ public final class SwarmFrontlineRotationPolicy {
         }
 
         boolean leftCovered = unique.values().stream()
-                .anyMatch(member -> member.role() == SwarmRole.FLANK_LEFT);
+                .anyMatch(member -> member.role() == SwarmRole.FLANK_LEFT
+                        && !committed(member.task()));
         boolean rightCovered = unique.values().stream()
-                .anyMatch(member -> member.role() == SwarmRole.FLANK_RIGHT);
+                .anyMatch(member -> member.role() == SwarmRole.FLANK_RIGHT
+                        && !committed(member.task()));
         // A reserve is eligible only after both local flank duties are covered.
         // Otherwise it may be the only member available to fill a missing side.
         if (!leftCovered || !rightCovered) return unchanged;
