@@ -20,6 +20,24 @@ Phase IV improves the existing Minecraft swarm controller without replacing vani
 - The existing species planners still determine Zombie, Skeleton, Spider, and Creeper behavior.
 - Tactical geometry changes pass through a configurable hysteresis window, preventing rapid pattern switching when observations fluctuate.
 
+## Phase IV-G — Bee workforce saturation and casualty-aware frontline rotation
+
+### Bee colony labor
+- Count only task assignments refreshed within 400 ticks and scoped to the Bee's current native hive.
+- Estimate local workforce size from those recent assignments; do not add a world entity scan or a global colony manager.
+- Derive desired headcounts from observed nectar shortage, brood demand, threat, build readiness, and worker fatigue.
+- Strongly reduce new recruitment into a filled task while retaining a softer incumbent preference; materially overstaffed tasks can release workers.
+- Preserve stable caste bias and task-switch hysteresis. Vanilla flight, pollination, hive entry, anger, and breeding remain authoritative.
+
+### Monster frontline rotation
+- Read health fractions only from the already sampled same-target local squad.
+- When the current Zombie CHASER is at or below 35% health, promote a healthy REAR_PRESSURE Zombie at or above 70% health if its health advantage is at least 35 percentage points.
+- Rotate only uncommitted assault members; ENGINEERING/MATERIAL workers and Spider flank assignments are not stolen.
+- The injured member moves to REAR_PRESSURE; the relief member takes CHASER. Existing role hysteresis still applies, with the normal urgent-vacancy hold.
+- The policy changes formation roles only. Vanilla target selection, damage, attacks, projectiles, Creeper fuse, and navigation remain authoritative.
+
+Validation: deterministic unit tests cover task saturation, hive scoping, stale census expiry, frontline relief thresholds, committed workers, species isolation, and roster-order independence.
+
 ## Controls and privacy
 
 The Player Learning page exposes the learning toggle, aggregate profile summaries, reset action, and tactical-pattern hold duration. Profiles are session-local and in-memory only. The mod does not persist raw combat events, player coordinates, movement paths, chat, or inventory, and it does not upload these summaries.
