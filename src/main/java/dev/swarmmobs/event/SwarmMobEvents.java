@@ -11,6 +11,7 @@ import dev.swarmmobs.agent.SwarmSpecialization;
 import dev.swarmmobs.agent.SwarmTaskType;
 import dev.swarmmobs.algorithm.CapabilitySlotAllocator;
 import dev.swarmmobs.algorithm.SwarmLocalRoleCoveragePolicy;
+import dev.swarmmobs.algorithm.SwarmFrontlineRotationPolicy;
 import dev.swarmmobs.algorithm.SwarmCombatPlanner;
 import dev.swarmmobs.algorithm.SwarmAdaptiveTacticsPolicy;
 import dev.swarmmobs.algorithm.SwarmTacticalHysteresisPolicy;
@@ -618,8 +619,30 @@ public final class SwarmMobEvents {
                             .toList(),
                     SwarmConfig.DIVISION_OF_LABOR_ENABLED.get());
         }
+        boolean frontlineRotated = false;
+        if (mob instanceof Zombie && !searchMode && squadCombat && confidence >= 0.65
+                && SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()) {
+            List<SwarmFrontlineRotationPolicy.Member> rotationRoster = new ArrayList<>();
+            rotationRoster.add(new SwarmFrontlineRotationPolicy.Member(
+                    mob.getUUID(), profile.archetype(), state.role(),
+                    state.currentTask(), healthFraction(mob)));
+            for (PathfinderMob peer : tacticalNeighbors) {
+                SwarmAgentState peerState = peer.getData(SwarmAttachments.AGENT_STATE.get());
+                rotationRoster.add(new SwarmFrontlineRotationPolicy.Member(
+                        peer.getUUID(), SwarmAgentProfiles.profile(peer).archetype(),
+                        peerState.role(), peerState.currentTask(), healthFraction(peer)));
+            }
+            SwarmFrontlineRotationPolicy.Decision rotation =
+                    SwarmFrontlineRotationPolicy.choose(
+                            mob.getUUID(), proposedRole, rotationRoster, true);
+            if (rotation.rotated()) {
+                proposedRole = rotation.role();
+                frontlineRotated = true;
+            }
+        }
         boolean urgentVacancy = coverage.fillingMissingFlank()
                 || coverage.frontAnchor()
+                || frontlineRotated
                 || (mob instanceof Spider && proposedRole != state.role());
         SwarmRole tacticalRole = state.stabilizeRole(
                 proposedRole,
@@ -1579,6 +1602,12 @@ public final class SwarmMobEvents {
             return player;
         }
         return null;
+    }
+
+    private static double healthFraction(PathfinderMob mob) {
+        double maximum = mob.getMaxHealth();
+        if (!Double.isFinite(maximum) || maximum <= 0.0) return 1.0;
+        return Math.max(0.0, Math.min(1.0, mob.getHealth() / maximum));
     }
 
     private static boolean validTarget(Player player) {
