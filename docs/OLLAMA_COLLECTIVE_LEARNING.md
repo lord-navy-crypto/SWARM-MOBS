@@ -47,6 +47,23 @@ The model returns a JSON-schema-constrained report:
 The Java layer validates enum values, drops unsupported presets, limits text lengths, and persists the sanitized report.
 The model cannot apply configuration changes through this interface.
 
+## Local Ollama discovery and model guidance
+
+The AI panel's Discover / Diagnose Ollama action and the commands below query only the configured loopback Ollama service:
+
+~~~text
+/swarmmobs ai discover
+/swarmmobs ai diagnose
+/swarmmobs ai models
+/swarmmobs ai model <exact-installed-name>
+~~~
+
+Discovery reads /api/version and /api/tags, reports installed model metadata (family, parameter size, quantization and file size), verifies whether the configured model is present, and ranks up to three local candidates using a transparent metadata heuristic. The ranking favors general-purpose chat/instruction families and moderate parameter/quantization profiles; it is not a benchmark and cannot infer GPU VRAM or guarantee structured-output quality.
+
+Discovery never downloads, starts, or selects a model. If none is installed, install one separately with the Ollama CLI, then run discovery again and select the exact installed name. This keeps large downloads and model choice under the user's control.
+
+GET-based version/model discovery retries once after a short delay on transient I/O or server errors. Inference POSTs are not automatically replayed, avoiding duplicate expensive generation after an ambiguous timeout. A missing selected model receives a direct diagnostic. Existing shadow/evaluation failures remain isolated from deterministic swarm behavior.
+
 ## Resource and failure behavior
 
 Only one learning evaluation may run at a time. It does not overlap an Ollama shadow request.

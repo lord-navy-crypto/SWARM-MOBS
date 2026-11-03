@@ -21,6 +21,8 @@ import dev.swarmmobs.ai.SwarmAiShadowService;
 import dev.swarmmobs.ai.SwarmAiShadowState;
 import dev.swarmmobs.ai.SwarmAiLearningMemory;
 import dev.swarmmobs.ai.SwarmAiLearningService;
+import dev.swarmmobs.ai.ollama.OllamaStrategyProvider;
+import dev.swarmmobs.ai.ollama.OllamaModelAdvisor;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.colony.SwarmNestScienceTelemetry;
 import dev.swarmmobs.experiment.SwarmExperimentManager;
@@ -284,6 +286,33 @@ public final class SwarmControlNetwork {
                     );
             case "ai_refresh" -> {
                 // Snapshot is returned by the normal server-authoritative refresh below.
+            }
+            case "ai_discover" -> {
+                player.sendSystemMessage(Component.literal(
+                        "Discovering local Ollama models; no model will be downloaded or selected automatically."
+                ));
+                OllamaStrategyProvider.INSTANCE.discover().whenComplete((discovery, error) ->
+                        player.getServer().execute(() -> {
+                            if (!player.isAlive()) {
+                                return;
+                            }
+                            if (error != null) {
+                                player.sendSystemMessage(Component.literal(
+                                        "Ollama discovery failed: " + error.getMessage()
+                                                + ". Deterministic swarm behavior remains available."
+                                ));
+                            } else {
+                                for (String line : OllamaModelAdvisor.diagnosticLines(
+                                        discovery,
+                                        SwarmConfig.OLLAMA_BASE_URL.get(),
+                                        SwarmConfig.OLLAMA_MODEL.get()
+                                )) {
+                                    player.sendSystemMessage(Component.literal(line));
+                                }
+                            }
+                            sendSnapshot(player);
+                        })
+                );
             }
             case "experiment_record" -> {
                 try {

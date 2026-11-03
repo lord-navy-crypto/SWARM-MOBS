@@ -15,6 +15,7 @@ import dev.swarmmobs.ai.SwarmAiShadowState;
 import dev.swarmmobs.ai.SwarmAiLearningMemory;
 import dev.swarmmobs.ai.SwarmAiLearningService;
 import dev.swarmmobs.ai.ollama.OllamaStrategyProvider;
+import dev.swarmmobs.ai.ollama.OllamaModelAdvisor;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.colony.SwarmNestBlockEntity;
 import dev.swarmmobs.colony.SwarmNestColonyPolicy;
@@ -201,6 +202,10 @@ public final class SwarmCommands {
                         .executes(context -> aiStatus(context.getSource())))
                 .then(Commands.literal("models")
                         .executes(context -> aiModels(context.getSource())))
+                .then(Commands.literal("discover")
+                        .executes(context -> aiDiscover(context.getSource())))
+                .then(Commands.literal("diagnose")
+                        .executes(context -> aiDiscover(context.getSource())))
                 .then(Commands.literal("model")
                         .then(Commands.argument("name", StringArgumentType.greedyString())
                                 .executes(context -> aiModel(
@@ -425,6 +430,34 @@ public final class SwarmCommands {
                                 ),
                                 false
                         );
+                    }
+                })
+        );
+        return 1;
+    }
+
+    private static int aiDiscover(CommandSourceStack source) {
+        source.sendSuccess(
+                () -> Component.literal("Discovering local Ollama version, installed models and recommendations. No downloads or model changes will be made."),
+                false
+        );
+        OllamaStrategyProvider.INSTANCE.discover().whenComplete((discovery, error) ->
+                source.getServer().execute(() -> {
+                    if (error != null) {
+                        source.sendFailure(Component.literal(
+                                "Ollama discovery failed: " + error.getMessage()
+                                        + ". Check that Ollama is running locally at "
+                                        + SwarmConfig.OLLAMA_BASE_URL.get()
+                                        + "; deterministic swarm behavior remains available."
+                        ));
+                        return;
+                    }
+                    for (String line : OllamaModelAdvisor.diagnosticLines(
+                            discovery,
+                            SwarmConfig.OLLAMA_BASE_URL.get(),
+                            SwarmConfig.OLLAMA_MODEL.get()
+                    )) {
+                        source.sendSuccess(() -> Component.literal(line), false);
                     }
                 })
         );

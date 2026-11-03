@@ -442,8 +442,8 @@ public final class SwarmControlScreen extends Screen {
 
         addRenderableWidget(
                 Button.builder(
-                        Component.literal("Refresh AI State"),
-                        button -> SwarmControlClient.sendAction("ai_refresh", 0.0)
+                        Component.literal("Discover / Diagnose Ollama"),
+                        button -> SwarmControlClient.sendAction("ai_discover", 0.0)
                 ).bounds(rightX, y, 300, 20).build()
         );
         y += 30;

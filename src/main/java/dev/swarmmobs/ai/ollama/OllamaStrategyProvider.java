@@ -43,13 +43,24 @@ public final class OllamaStrategyProvider implements SwarmStrategyProvider {
         String endpoint = SwarmConfig.OLLAMA_BASE_URL.get();
         String model = SwarmConfig.OLLAMA_MODEL.get();
 
-        return listModels()
-                .thenApply(models -> {
-                    boolean selectedPresent = model == null || model.isBlank() || models.contains(model);
-                    String message = models.isEmpty()
-                            ? "Ollama responded, but no local models were reported."
-                            : "Ollama online; " + models.size() + " local model(s) available"
-                                    + (selectedPresent ? "." : "; selected model is not installed.");
+        return discover()
+                .thenApply(discovery -> {
+                    List<String> models = discovery.models().stream()
+                            .map(OllamaClient.ModelInfo::name)
+                            .toList();
+                    boolean selectedPresent = model != null && !model.isBlank() && models.contains(model);
+                    String message;
+                    if (models.isEmpty()) {
+                        message = "Ollama v" + discovery.version() + " online, but no local models are installed.";
+                    } else if (model == null || model.isBlank()) {
+                        message = "Ollama v" + discovery.version() + " online; " + models.size()
+                                + " local model(s) available; no model selected.";
+                    } else if (!selectedPresent) {
+                        message = "Ollama online; selected model is not installed.";
+                    } else {
+                        message = "Ollama v" + discovery.version() + " online; " + models.size()
+                                + " local model(s) available; selected model is installed.";
+                    }
                     return new ProviderStatus(true, id(), endpoint, model, message);
                 })
                 .exceptionally(error -> new ProviderStatus(
@@ -59,6 +70,13 @@ public final class OllamaStrategyProvider implements SwarmStrategyProvider {
                         model,
                         conciseError(error)
                 ));
+    }
+
+    public CompletableFuture<OllamaClient.Discovery> discover() {
+        return client.discover(
+                SwarmConfig.OLLAMA_BASE_URL.get(),
+                SwarmConfig.OLLAMA_TIMEOUT_MS.get()
+        );
     }
 
     @Override
