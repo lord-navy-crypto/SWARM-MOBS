@@ -34,4 +34,4 @@ The deterministic swarm planner remains the gameplay authority. Ollama Shadow re
 
 ## Verification
 
-Unit tests cover NBT round-trip, offline-time handling, schema rejection and deterministic save staggering. Runtime GameTests and a real-client inspection remain required before release.
+Pure-Java unit tests cover experience-vector encode/decode, offline-time handling, schema rejection, value bounds and deterministic save staggering. The Minecraft NBT adapter is compiled in the mod runtime and still needs runtime integration verification. Runtime GameTests and a real-client inspection remain required before release.
