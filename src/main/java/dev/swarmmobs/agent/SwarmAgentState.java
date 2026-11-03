@@ -754,6 +754,37 @@ public final class SwarmAgentState {
         return taskExperience.getOrDefault(task, 0.0);
     }
 
+    /** Immutable snapshot used by the compact per-entity persistent memory record. */
+    public Map<SwarmTaskType, Double> taskExperienceSnapshot() {
+        EnumMap<SwarmTaskType, Double> snapshot = new EnumMap<>(SwarmTaskType.class);
+        for (SwarmTaskType task : SwarmTaskType.values()) {
+            snapshot.put(task, taskExperience(task));
+        }
+        return Map.copyOf(snapshot);
+    }
+
+    /**
+     * Restore only bounded task experience. Runtime assignments, targets,
+     * navigation, communication queues and tactical hysteresis are rebuilt
+     * from fresh observations after the entity joins the level.
+     */
+    public void restoreTaskExperience(
+            Map<SwarmTaskType, Double> snapshot,
+            long currentGameTick
+    ) {
+        taskExperience.clear();
+        for (SwarmTaskType task : SwarmTaskType.values()) {
+            Double value = snapshot == null ? null : snapshot.get(task);
+            double bounded = value == null || !Double.isFinite(value)
+                    ? 0.0
+                    : Math.max(0.0, Math.min(1.0, value));
+            taskExperience.put(task, bounded);
+        }
+        taskExperienceAtTickStart.clear();
+        taskExperienceSnapshotTick = Long.MIN_VALUE;
+        lastTaskExperienceUpdateTick = Math.max(0L, currentGameTick);
+    }
+
     /** Same-tick stable view used by all members of a local task auction. */
     public double taskExperienceAtStartOfTick(SwarmTaskType task, long gameTick) {
         if (task == null) return 0.0;
