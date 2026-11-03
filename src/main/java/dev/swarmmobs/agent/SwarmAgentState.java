@@ -162,6 +162,8 @@ public final class SwarmAgentState {
     private final EnumMap<SwarmTaskType, Double> taskExperience =
             new EnumMap<>(SwarmTaskType.class);
     private long lastTaskExperienceUpdateTick = Long.MIN_VALUE;
+    private long localTaskAuctionRounds;
+    private long localTaskAuctionAssignments;
 
     private final List<TargetMessage> pendingTargetMessages = new ArrayList<>();
     private final LinkedHashMap<MessageSourceTargetKey, Long> latestDeliveredObservationBySource =
@@ -725,6 +727,19 @@ public final class SwarmAgentState {
             return 0.0;
         }
         return taskExperience.getOrDefault(task, 0.0);
+    }
+
+    public long localTaskAuctionRounds() {
+        return localTaskAuctionRounds;
+    }
+
+    public long localTaskAuctionAssignments() {
+        return localTaskAuctionAssignments;
+    }
+
+    public void recordLocalTaskAuction(boolean specializedAssignment) {
+        localTaskAuctionRounds++;
+        if (specializedAssignment) localTaskAuctionAssignments++;
     }
 
     public SwarmSpecialization stabilizeSpecialization(

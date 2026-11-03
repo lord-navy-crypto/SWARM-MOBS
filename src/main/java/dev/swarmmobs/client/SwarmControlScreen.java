@@ -288,6 +288,13 @@ public final class SwarmControlScreen extends Screen {
                         + " / FLANK " + (int) number("taskFlank"));
         y += 28;
 
+        addToggleRow(leftX, y, "Local peer task auction",
+                bool("localTaskAuctionEnabled"), "toggle_local_task_auction");
+        addStatusRow(rightX, y, "Auction rounds / assignments",
+                (int) number("taskAuctionRounds") + " / "
+                        + (int) number("taskAuctionAssignments"));
+        y += 28;
+
         addNumericRow(leftX, y, "Minimum specialization hold",
                 (int) number("specializationHoldTicks") + " ticks",
                 "specialization_hold_delta", 5.0);

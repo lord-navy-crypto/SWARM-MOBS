@@ -155,6 +155,7 @@ public final class SwarmControlNetwork {
             case "nest_interval_delta" -> { SwarmConfig.NEST_BUILD_INTERVAL_TICKS.set((int) Math.round(Math.max(100, Math.min(1200, value)))); return true; }
             case "nest_population_delta" -> { SwarmConfig.NEST_MIN_GROUP_SIZE.set((int) Math.round(Math.max(2, Math.min(16, value)))); return true; }
             case "toggle_division" -> { SwarmConfig.DIVISION_OF_LABOR_ENABLED.set(value >= 0.5); return true; }
+            case "local_task_auction_enabled" -> { SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.set(value >= 0.5); return true; }
             case "support_position_toggle" -> { SwarmConfig.SUPPORT_POSITION_OPTIMIZATION_ENABLED.set(value >= 0.5); return true; }
             case "formation_hysteresis_delta" -> { SwarmConfig.FORMATION_SLOT_HYSTERESIS_TICKS.set((int) Math.round(Math.max(0, Math.min(200, value)))); return true; }
             case "role_hysteresis_delta" -> { SwarmConfig.ROLE_HYSTERESIS_TICKS.set((int) Math.round(Math.max(0, Math.min(200, value)))); return true; }
@@ -315,6 +316,8 @@ public final class SwarmControlNetwork {
 
             case "toggle_division" ->
                     SwarmConfig.DIVISION_OF_LABOR_ENABLED.set(!SwarmConfig.DIVISION_OF_LABOR_ENABLED.get());
+            case "toggle_local_task_auction" ->
+                    SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.set(!SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.get());
             case "specialization_hold_delta" -> SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.set((int) clamp(
                     SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.get() + value,
                     0.0,
@@ -332,6 +335,7 @@ public final class SwarmControlNetwork {
             ));
             case "labor_baseline" -> {
                 SwarmConfig.DIVISION_OF_LABOR_ENABLED.set(true);
+                SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.set(true);
                 SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.set(30);
                 SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.set(0.025);
                 SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.set(0.995);
@@ -695,6 +699,7 @@ public final class SwarmControlNetwork {
                 SwarmConfig.FORMATION_SLOT_HYSTERESIS_TICKS.set(20);
                 SwarmConfig.ROLE_HYSTERESIS_TICKS.set(12);
                 SwarmConfig.DIVISION_OF_LABOR_ENABLED.set(true);
+                SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.set(true);
                 SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.set(30);
                 SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.set(0.025);
                 SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.set(0.995);
@@ -853,6 +858,8 @@ public final class SwarmControlNetwork {
                 supportUnavailableSamples = 0;
         long nestsFoundedByLoadedAgents = 0L;
         long collectiveObservationFusions = 0L;
+        long localTaskAuctionRounds = 0L;
+        long localTaskAuctionAssignments = 0L;
         int agentsWithRecentFusion = 0;
         long fusionContributorTotal = 0L;
         double maximumFusionDisagreement = 0.0;
@@ -885,6 +892,8 @@ public final class SwarmControlNetwork {
                 SwarmAgentState tacticalState =
                         mob.getData(SwarmAttachments.AGENT_STATE.get());
                 collectiveObservationFusions += tacticalState.collectiveObservationFusionCount();
+                localTaskAuctionRounds += tacticalState.localTaskAuctionRounds();
+                localTaskAuctionAssignments += tacticalState.localTaskAuctionAssignments();
                 if (tacticalState.lastFusionContributorCount() > 1) {
                     agentsWithRecentFusion++;
                     fusionContributorTotal += tacticalState.lastFusionContributorCount();
@@ -1158,6 +1167,9 @@ public final class SwarmControlNetwork {
                 pair("specOverwatch", specializationCounts.getOrDefault(SwarmSpecialization.OVERWATCH, 0)),
                 pair("specLeadBreacher", specializationCounts.getOrDefault(SwarmSpecialization.LEAD_BREACHER, 0)),
                 pair("divisionEnabled", SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()),
+                pair("localTaskAuctionEnabled", SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.get()),
+                pair("taskAuctionRounds", Math.min(Integer.MAX_VALUE, localTaskAuctionRounds)),
+                pair("taskAuctionAssignments", Math.min(Integer.MAX_VALUE, localTaskAuctionAssignments)),
                 pair("specializationHoldTicks", SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.get()),
                 pair("specializationExperienceGain", SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get()),
                 pair("specializationExperienceDecay", SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get()),

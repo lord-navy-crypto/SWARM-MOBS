@@ -121,6 +121,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue NEST_BUILD_INTERVAL_TICKS;
     public static final ModConfigSpec.IntValue NEST_MIN_GROUP_SIZE;
     public static final ModConfigSpec.BooleanValue DIVISION_OF_LABOR_ENABLED;
+    public static final ModConfigSpec.BooleanValue LOCAL_TASK_AUCTION_ENABLED;
     public static final ModConfigSpec.IntValue SPECIALIZATION_MIN_HOLD_TICKS;
     public static final ModConfigSpec.DoubleValue SPECIALIZATION_EXPERIENCE_GAIN;
     public static final ModConfigSpec.DoubleValue SPECIALIZATION_EXPERIENCE_DECAY;
@@ -567,6 +568,10 @@ public final class SwarmConfig {
         DIVISION_OF_LABOR_ENABLED = BUILDER
                 .comment("Enable dynamic local task demand, bidding, and within-species specialization.")
                 .define("enabled", true);
+
+        LOCAL_TASK_AUCTION_ENABLED = BUILDER
+                .comment("Use deterministic same-target peer matching so each nearby agent receives at most one task and task headcounts remain bounded.")
+                .define("localAuctionEnabled", true);
 
         SPECIALIZATION_MIN_HOLD_TICKS = BUILDER
                 .comment("Minimum time a dynamic specialization is held before switching to another task.")

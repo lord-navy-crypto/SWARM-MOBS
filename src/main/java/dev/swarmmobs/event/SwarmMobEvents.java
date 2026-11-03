@@ -30,6 +30,7 @@ import dev.swarmmobs.algorithm.SwarmSkeletonSightlinePolicy;
 import dev.swarmmobs.algorithm.SwarmOptionalGameWaypointCommitmentPolicy;
 import dev.swarmmobs.algorithm.SwarmEngagementPolicy;
 import dev.swarmmobs.algorithm.SwarmDivisionOfLaborPolicy;
+import dev.swarmmobs.algorithm.SwarmLocalTaskAuctionPolicy;
 import dev.swarmmobs.algorithm.SwarmEngineeringEscalationPolicy;
 import dev.swarmmobs.algorithm.SwarmSpecializationRolePolicy;
 import dev.swarmmobs.algorithm.SwarmTaskDemandPolicy;
@@ -424,30 +425,15 @@ public final class SwarmMobEvents {
                     state.plannerFeasibleCount()
             );
 
-            SwarmTaskDemandPolicy.Signals demandSignals =
-                    new SwarmTaskDemandPolicy.Signals(
-                            searchMode,
-                            routeBlocked,
-                            zombieColonyEngineeringEnabled
-                                    && state.carriedEngineeringBlockCount() > 0,
-                            composition.dedicatedFlankCoverage(),
-                            composition.hasBreacher(),
-                            composition.rangedSupportCount() > 0,
-                            confidence
-                    );
-
-            boolean combatBusy = SwarmCombatBusyPolicy.isBusy(
-                    mob.getTarget() != null,
-                    mob.getTarget() != null && mob.hasLineOfSight(mob.getTarget()),
-                    mob.getTarget() == null
-                            ? Double.POSITIVE_INFINITY
-                            : mob.distanceToSqr(mob.getTarget()),
-                    SwarmConfig.RELEASE_TO_VANILLA_DISTANCE.get()
-            );
+            boolean localTaskAuctionEnabled = SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.get();
+            boolean squadRouteBlocked = routeBlocked;
+            boolean squadHasEngineeringMaterial = zombieColonyEngineeringEnabled
+                    && state.carriedEngineeringBlockCount() > 0;
+            double squadConfidence = confidence;
 
             EnumMap<SwarmTaskType, Integer> peerTaskOccupancy =
                     new EnumMap<>(SwarmTaskType.class);
-            int sameTargetPeerCount = 0;
+            List<PathfinderMob> sameTargetPeers = new ArrayList<>();
             for (PathfinderMob peer : tacticalNeighbors) {
                 SwarmAgentState peerState =
                         peer.getData(SwarmAttachments.AGENT_STATE.get());
@@ -456,37 +442,103 @@ public final class SwarmMobEvents {
                         || !state.targetId().equals(peerState.targetId())) {
                     continue;
                 }
-                sameTargetPeerCount++;
+                sameTargetPeers.add(peer);
                 peerTaskOccupancy.merge(peerState.currentTask(), 1, Integer::sum);
+                squadConfidence = Math.max(
+                        squadConfidence,
+                        peerState.targetConfidence(
+                                gameTick, SwarmConfig.TARGET_MEMORY_TICKS.get()));
+                if (zombieColonyEngineeringEnabled) {
+                    squadHasEngineeringMaterial |= peerState.carriedEngineeringBlockCount() > 0;
+                    squadRouteBlocked |= SwarmEngineeringEscalationPolicy.shouldEscalate(
+                            peerState.plannerContext(),
+                            peerState.plannerBlockedCount(),
+                            peerState.plannerUnreachableCount(),
+                            peerState.plannerFeasibleCount());
+                }
             }
-            int localGroupSize = sameTargetPeerCount + 1;
+            int localGroupSize = sameTargetPeers.size() + 1;
+            boolean squadSearchMode = !squadCombat
+                    && squadConfidence < SwarmConfig.SEARCH_CONFIDENCE_THRESHOLD.get();
 
-            var assignment = SwarmDivisionOfLaborPolicy.choose(
-                    mob.getUUID(),
-                    profile.archetype(),
-                    state.currentTask(),
-                    task -> {
-                        double demand = SwarmTaskDemandPolicy.demand(task, demandSignals);
-                        if (activeStrategy != null && activeStrategy.active()) {
-                            demand = SwarmAiTaskDemandPolicy.apply(
-                                    demand,
-                                    activeStrategy.decision().mode(),
-                                    task
-                            );
-                        }
-                        return SwarmTaskSaturationPolicy.adjustedDemand(
+            SwarmTaskDemandPolicy.Signals demandSignals = new SwarmTaskDemandPolicy.Signals(
+                    localTaskAuctionEnabled ? squadSearchMode : searchMode,
+                    localTaskAuctionEnabled ? squadRouteBlocked : routeBlocked,
+                    localTaskAuctionEnabled
+                            ? squadHasEngineeringMaterial
+                            : zombieColonyEngineeringEnabled
+                                    && state.carriedEngineeringBlockCount() > 0,
+                    composition.dedicatedFlankCoverage(),
+                    composition.hasBreacher(),
+                    composition.rangedSupportCount() > 0,
+                    localTaskAuctionEnabled ? squadConfidence : confidence
+            );
+
+            java.util.function.ToDoubleFunction<SwarmTaskType> baseDemandProvider = task -> {
+                double demand = SwarmTaskDemandPolicy.demand(task, demandSignals);
+                if (activeStrategy != null && activeStrategy.active()) {
+                    demand = SwarmAiTaskDemandPolicy.apply(
+                            demand,
+                            activeStrategy.decision().mode(),
+                            task
+                    );
+                }
+                return demand;
+            };
+
+            SwarmDivisionOfLaborPolicy.Assignment assignment;
+            if (localTaskAuctionEnabled) {
+                List<SwarmLocalTaskAuctionPolicy.Member> auctionMembers =
+                        new ArrayList<>(localGroupSize);
+                auctionMembers.add(taskAuctionMember(mob, state, observation));
+                for (PathfinderMob peer : sameTargetPeers) {
+                    SwarmAgentState peerState =
+                            peer.getData(SwarmAttachments.AGENT_STATE.get());
+                    auctionMembers.add(taskAuctionMember(
+                            peer,
+                            peerState,
+                            observation
+                    ));
+                }
+
+                SwarmLocalTaskAuctionPolicy.Result auction =
+                        SwarmLocalTaskAuctionPolicy.allocate(
+                                auctionMembers,
+                                baseDemandProvider
+                        );
+                SwarmLocalTaskAuctionPolicy.Assignment selected =
+                        auction.assignment(mob.getUUID());
+                assignment = selected == null
+                        ? new SwarmDivisionOfLaborPolicy.Assignment(
+                                SwarmTaskType.RESERVE, 0.0, 0.0, 0.0)
+                        : new SwarmDivisionOfLaborPolicy.Assignment(
+                                selected.task(),
+                                selected.utility(),
+                                selected.demand(),
+                                selected.responseThreshold()
+                        );
+                state.recordLocalTaskAuction(assignment.task() != SwarmTaskType.RESERVE);
+            } else {
+                SwarmLocalTaskAuctionPolicy.Member self =
+                        taskAuctionMember(mob, state, observation);
+                boolean combatBusy = self.combatBusy();
+                assignment = SwarmDivisionOfLaborPolicy.choose(
+                        mob.getUUID(),
+                        profile.archetype(),
+                        state.currentTask(),
+                        task -> SwarmTaskSaturationPolicy.adjustedDemand(
                                 profile.archetype(),
                                 task,
-                                demand,
+                                baseDemandProvider.applyAsDouble(task),
                                 localGroupSize,
                                 peerTaskOccupancy.getOrDefault(task, 0),
                                 state.currentTask()
-                        );
-                    },
-                    state::taskExperience,
-                    0.0,
-                    combatBusy
-            );
+                        ),
+                        state::taskExperience,
+                        self.normalizedDistance(),
+                        combatBusy
+                );
+            }
 
             SwarmSpecialization specializationCandidate =
                     SwarmSpecialization.forAssignment(
@@ -1196,6 +1248,44 @@ public final class SwarmMobEvents {
                 shooter
         ));
         return hit.getType() == HitResult.Type.MISS;
+    }
+
+    private static SwarmLocalTaskAuctionPolicy.Member taskAuctionMember(
+            PathfinderMob mob,
+            SwarmAgentState state,
+            TargetObservation observation
+    ) {
+        EnumMap<SwarmTaskType, Double> experience =
+                new EnumMap<>(SwarmTaskType.class);
+        for (SwarmTaskType task : SwarmTaskType.values()) {
+            experience.put(task, state.taskExperience(task));
+        }
+
+        double dx = mob.getX() - observation.x();
+        double dy = mob.getY() - observation.y();
+        double dz = mob.getZ() - observation.z();
+        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double normalizedDistance = Double.isFinite(distance)
+                ? Math.max(0.0, Math.min(4.0,
+                        distance / Math.max(8.0, SwarmConfig.NEIGHBOR_RADIUS.get())))
+                : 4.0;
+
+        var target = mob.getTarget();
+        boolean combatBusy = SwarmCombatBusyPolicy.isBusy(
+                target != null,
+                target != null && mob.hasLineOfSight(target),
+                target == null ? Double.POSITIVE_INFINITY : mob.distanceToSqr(target),
+                SwarmConfig.RELEASE_TO_VANILLA_DISTANCE.get()
+        );
+
+        return new SwarmLocalTaskAuctionPolicy.Member(
+                mob.getUUID(),
+                SwarmAgentProfiles.profile(mob).archetype(),
+                state.currentTask(),
+                experience,
+                normalizedDistance,
+                combatBusy
+        );
     }
 
     /**
