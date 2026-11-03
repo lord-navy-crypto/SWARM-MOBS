@@ -96,7 +96,7 @@ public final class BeeHiveEvents {
         double fatigue = BeeColonyRuntime.cycles(level).fatigue(bee.getUUID(), now);
         BeeTaskPolicy.Needs needs = BeeFlowerEvents.colonyNeeds(level, home, fatigue,
                 SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get(), true);
-        if (BeeColonyRuntime.tasks(level).assign(bee.getUUID(), needs, now)
+        if (BeeColonyRuntime.tasks(level).assign(bee.getUUID(), home.asLong(), needs, now)
                 != BeeTaskPolicy.Task.BUILD) return false;
         // Claim only after selecting a real BUILD worker; FORAGE/REST workers
         // must not suppress another worker's same-tick construction attempt.
