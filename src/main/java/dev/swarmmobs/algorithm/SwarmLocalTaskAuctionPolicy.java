@@ -20,7 +20,7 @@ import java.util.function.ToDoubleFunction;
  * Deterministic, bounded local matching for one same-target neighborhood.
  *
  * Every nearby agent evaluates the same candidate set and demand snapshot.
- * A greedy maximum-utility matching gives each agent at most one task and
+ * A utility-ordered greedy matching gives each agent at most one task and
  * respects each task's desired local headcount. UUID tie-breaking makes the
  * result independent of entity iteration order. This is a local computation,
  * not a central squad controller or a persistent/global assignment service.
@@ -174,7 +174,8 @@ public final class SwarmLocalTaskAuctionPolicy {
             if (desired <= 0 || baseDemand <= 0.0) continue;
             int nativeCoreMembers = (int) members.stream()
                     .filter(member -> SwarmTaskSaturationPolicy.isNativeCoreTask(
-                            member.archetype(), task))
+                            member.archetype(), task)
+                            && (!member.taskSwitchLocked() || member.currentTask() == task))
                     .count();
             int lockedIncumbents = lockedOccupancy.getOrDefault(task, 0);
             int taskCapacity = Math.min(

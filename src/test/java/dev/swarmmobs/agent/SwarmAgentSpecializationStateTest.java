@@ -104,6 +104,33 @@ class SwarmAgentSpecializationStateTest {
     }
 
     @Test
+    void taskSwitchHoldSnapshotIsConsistentWithinTick() {
+        SwarmAgentState state = new SwarmAgentState();
+        state.stabilizeSpecialization(
+                SwarmTaskType.BREACH, SwarmSpecialization.VANGUARD, 100L, 30);
+
+        assertTrue(state.taskSwitchLockedAtStartOfTick(101L, 30));
+
+        state.stabilizeSpecialization(
+                SwarmTaskType.ENGINEERING, SwarmSpecialization.ENGINEER, 130L, 30);
+
+        assertFalse(state.taskSwitchLockedAtStartOfTick(130L, 30));
+        assertTrue(state.taskSwitchLockedAtStartOfTick(131L, 30));
+    }
+
+    @Test
+    void targetResetReleasesThePreviousSpecializationHold() {
+        SwarmAgentState state = new SwarmAgentState();
+        state.stabilizeSpecialization(
+                SwarmTaskType.ENGINEERING, SwarmSpecialization.ENGINEER, 100L, 40);
+
+        state.resetActiveSpecialization(101L);
+
+        assertEquals(SwarmTaskType.RESERVE, state.currentTask());
+        assertFalse(state.taskSwitchLockedAtStartOfTick(101L, 40));
+    }
+
+    @Test
     void activeTaskExperienceReinforcesWhileInactiveExperienceDecays() {
         SwarmAgentState state = new SwarmAgentState();
 

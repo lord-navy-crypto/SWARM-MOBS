@@ -42,3 +42,22 @@ The existing neighbor-to-neighbor message system now fuses fresh, spatially cons
 - The Communication page exposes the fusion toggle, time window, cumulative fusion count, and current contributor summary.
 
 Default fusion window: 4 ticks. Maximum accepted horizontal disagreement: 8 blocks. Maximum temporal correction: 3 blocks. Fusion is enabled by default and can be disabled independently of message communication.
+
+## Phase IV-C — Collective Experience and Local Task Auctions
+
+Task experience is now measured against elapsed game time rather than the number of planner updates. The existing gain and retention settings are calibrated to the original six-tick planning interval; fractional intervals compose consistently, so changing the planner cadence does not accelerate or slow learning. Catch-up after long inactive gaps is capped at 40 ticks.
+
+The same-target neighborhood now runs a deterministic local matching pass:
+
+- Each member bids for tasks using its archetype capability, task experience, observed-target distance, combat-busy penalty, and current assignment switching cost.
+- A utility-ordered greedy matching gives each member at most one task and respects per-task desired headcounts.
+- Native species-core assignments and incumbents still inside their specialization hold window retain their required capacity.
+- Task occupancy, task experience, and specialization-hold state use same-tick snapshots, reducing entity-tick-order effects when nearby mobs update sequentially.
+- UUID tie-breaking and duplicate-member filtering keep the result stable for an identical local candidate set.
+- The auction reuses the existing same-target neighbor list; it does not scan all loaded entities or issue additional pathfinding queries.
+
+The Labor page exposes an independent local-auction toggle and aggregate round/assignment counters. The feature is enabled by default, can be disabled without disabling the existing per-agent division-of-labor policy, and remains local to the observed neighborhood rather than introducing a central squad commander.
+
+Experience and auction telemetry remain in-memory agent state. No raw combat history, player coordinates, movement paths, chat, inventory, or external service data are persisted by this phase.
+
+Validation includes cadence-invariance tests, deterministic-order tests, capacity and native-core tests, locked-incumbent tests, same-tick snapshot tests, and the existing runtime GameTests.
