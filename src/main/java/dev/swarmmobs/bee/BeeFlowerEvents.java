@@ -87,7 +87,7 @@ public final class BeeFlowerEvents {
                 cycle.fatigue(), SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get(),
                 hiveGrowth);
         BeeTaskPolicy.Task task = BeeColonyRuntime.tasks(level).assign(
-                bee.getUUID(), needs, now);
+                bee.getUUID(), activeHome.asLong(), needs, now);
 
         if (task == BeeTaskPolicy.Task.REST) {
             BeeColonyRuntime.cycles(level).markRestRequested(bee.getUUID(), now);
