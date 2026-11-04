@@ -30,7 +30,12 @@ public final class BeeActionMemory {
         return lastCueTicks.size();
     }
 
+    private long lastPruneTick = Long.MIN_VALUE;
+
     private void prune(long now) {
+        if (lastPruneTick != Long.MIN_VALUE && now >= lastPruneTick
+                && now - lastPruneTick < 100L) return;
+        lastPruneTick = now;
         lastCueTicks.entrySet().removeIf(entry ->
                 now < entry.getValue() || now - entry.getValue() >= MEMORY_TICKS);
     }

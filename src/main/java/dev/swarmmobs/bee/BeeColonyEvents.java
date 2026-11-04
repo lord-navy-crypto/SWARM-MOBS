@@ -74,8 +74,9 @@ public final class BeeColonyEvents {
 
         if (BeeCastePolicy.caste(bee.getUUID()) == BeeCastePolicy.Caste.GUARD) {
             SwarmActionVisuals.beeGuardAlert(level, bee);
+        } else {
+            SwarmActionVisuals.beeReturnHome(level, bee);
         }
-        SwarmActionVisuals.beeReturnHome(level, bee);
 
         // Cancel only the optional remembered flower destination. The bee's
         // own hive is loaded and within a bounded radius; no chunk is requested.

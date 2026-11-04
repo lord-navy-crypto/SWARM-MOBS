@@ -51,9 +51,10 @@ public final class BeeFlowerEvents {
 
         if (cycle.acquiredNectar()) SwarmActionVisuals.beePollinate(level, bee);
         if (cycle.completedTrip()) {
-            SwarmActionVisuals.beeReturnDelivery(level, bee);
             if (BeeCastePolicy.caste(bee.getUUID()) == BeeCastePolicy.Caste.SCOUT) {
                 SwarmActionVisuals.beeScoutReport(level, bee);
+            } else {
+                SwarmActionVisuals.beeReturnDelivery(level, bee);
             }
         }
 
@@ -128,7 +129,6 @@ public final class BeeFlowerEvents {
             if (distanceSquared > 2.5 * 2.5
                     && (bee.getNavigation().isDone()
                         || Math.floorMod(now + bee.getId(), 20L) == 0L)) {
-                SwarmActionVisuals.beeReturnHome(level, bee);
                 bee.getNavigation().moveTo(activeHome.getX() + 0.5,
                         activeHome.getY() + 0.5, activeHome.getZ() + 0.5, 0.85);
             }
