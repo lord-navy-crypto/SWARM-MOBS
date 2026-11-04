@@ -24,7 +24,17 @@ The current Phase IV-H implementation uses vanilla entity swing synchronization 
 
 These cues do not change pathfinding, attack cadence, fuse timing, task allocation, or world mutation. They can be disabled with the server config option `actionVisualsEnabled`.
 
-## GeckoLib animation foundation
+## GeckoLib animated colony signal
+
+The Nest Core now has a small floating signal orb rendered by GeckoLib. The original block model is not replaced.
+
+- **Idle:** a slow rotation and gentle bob make the colony core visibly active.
+- **Scout report:** a pulse is triggered only after the Nest Core accepts a valid resource report.
+- **Delivery:** a pulse is triggered only after a worker's physical haul is accepted and counted.
+- **Rally:** a short signal is triggered when a new visible colony leader is appointed.
+
+The server triggers these animations from completed state transitions. A short per-core cooldown bounds animation packets when several events arrive together. The animation state is transient presentation data: it is not added to agent memory, colony ledgers, or experiment history.
+
 
 GeckoLib **4.9.3** is pinned for Minecraft 1.21.1 / NeoForge and declared as a required runtime dependency. This foundation commit adds the dependency and metadata; it does not claim that GeckoLib entity renderers or animation assets are already active.
 
