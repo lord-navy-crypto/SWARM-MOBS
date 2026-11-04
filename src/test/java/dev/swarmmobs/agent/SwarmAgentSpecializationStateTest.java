@@ -53,7 +53,8 @@ class SwarmAgentSpecializationStateTest {
                 100L,
                 30
         );
-        state.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.40, 1.0);
+        state.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.40, 1.0, 94L);
+        state.updateTaskExperience(SwarmTaskType.ENGINEERING, 0.40, 1.0, 100L);
 
         state.resetActiveSpecialization();
 
@@ -75,14 +76,81 @@ class SwarmAgentSpecializationStateTest {
     }
 
     @Test
+    void sameTickTaskSnapshotDoesNotDependOnEntityTickOrder() {
+        SwarmAgentState state = new SwarmAgentState();
+        state.stabilizeSpecialization(
+                SwarmTaskType.SEARCH, SwarmSpecialization.SCOUT, 100L, 0);
+
+        assertEquals(SwarmTaskType.RESERVE, state.taskAtStartOfTick(100L));
+
+        state.stabilizeSpecialization(
+                SwarmTaskType.FLANK, SwarmSpecialization.FLANKER_LEFT, 101L, 0);
+
+        assertEquals(SwarmTaskType.SEARCH, state.taskAtStartOfTick(101L));
+        assertEquals(SwarmTaskType.FLANK, state.currentTask());
+        assertEquals(SwarmTaskType.FLANK, state.taskAtStartOfTick(102L));
+    }
+
+    @Test
+    void sameTickExperienceSnapshotIsStableAfterFirstAgentUpdates() {
+        SwarmAgentState state = new SwarmAgentState();
+        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.10, 1.0, 100L);
+        assertEquals(0.0, state.taskExperienceAtStartOfTick(SwarmTaskType.SEARCH, 100L), 1e-9);
+
+        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.10, 1.0, 106L);
+        assertEquals(0.10, state.taskExperience(SwarmTaskType.SEARCH), 1e-9);
+        assertEquals(0.0, state.taskExperienceAtStartOfTick(SwarmTaskType.SEARCH, 106L), 1e-9);
+        assertEquals(0.10, state.taskExperienceAtStartOfTick(SwarmTaskType.SEARCH, 107L), 1e-9);
+    }
+
+    @Test
+    void taskSwitchHoldSnapshotIsConsistentWithinTick() {
+        SwarmAgentState state = new SwarmAgentState();
+        state.stabilizeSpecialization(
+                SwarmTaskType.BREACH, SwarmSpecialization.VANGUARD, 100L, 30);
+
+        assertTrue(state.taskSwitchLockedAtStartOfTick(101L, 30));
+
+        state.stabilizeSpecialization(
+                SwarmTaskType.ENGINEERING, SwarmSpecialization.ENGINEER, 130L, 30);
+
+        assertFalse(state.taskSwitchLockedAtStartOfTick(130L, 30));
+        assertTrue(state.taskSwitchLockedAtStartOfTick(131L, 30));
+    }
+
+    @Test
+    void targetResetReleasesThePreviousSpecializationHold() {
+        SwarmAgentState state = new SwarmAgentState();
+        state.stabilizeSpecialization(
+                SwarmTaskType.ENGINEERING, SwarmSpecialization.ENGINEER, 100L, 40);
+
+        state.resetActiveSpecialization(101L);
+
+        assertEquals(SwarmTaskType.RESERVE, state.currentTask());
+        assertFalse(state.taskSwitchLockedAtStartOfTick(101L, 40));
+    }
+
+    @Test
+    void experienceContinuesToDecayWhenNoTaskIsActive() {
+        SwarmAgentState state = new SwarmAgentState();
+        state.updateTaskExperience(null, 0.20, 0.5, 100L);
+        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 0.5, 106L);
+        assertEquals(0.20, state.taskExperience(SwarmTaskType.SEARCH), 1e-9);
+
+        state.updateTaskExperience(null, 0.20, 0.5, 112L);
+        assertEquals(0.10, state.taskExperience(SwarmTaskType.SEARCH), 1e-9);
+    }
+
+    @Test
     void activeTaskExperienceReinforcesWhileInactiveExperienceDecays() {
         SwarmAgentState state = new SwarmAgentState();
 
-        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 1.0);
-        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 1.0);
+        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 1.0, 100L);
+        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 1.0, 106L);
+        state.updateTaskExperience(SwarmTaskType.SEARCH, 0.20, 1.0, 112L);
         assertEquals(0.40, state.taskExperience(SwarmTaskType.SEARCH), 1e-9);
 
-        state.updateTaskExperience(SwarmTaskType.FLANK, 0.10, 0.5);
+        state.updateTaskExperience(SwarmTaskType.FLANK, 0.10, 0.5, 118L);
 
         assertEquals(0.20, state.taskExperience(SwarmTaskType.SEARCH), 1e-9);
         assertEquals(0.10, state.taskExperience(SwarmTaskType.FLANK), 1e-9);

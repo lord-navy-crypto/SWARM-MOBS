@@ -137,3 +137,17 @@ Dedicated Runtime GameTests gate both Skeleton bow combat and Creeper fuse hando
 Creeper swarm approach now remains active all the way to the dedicated 3.0-block fuse handoff envelope instead of inheriting the generic 3.25-block melee release distance. This closes the pre-fuse boundary band where movement could otherwise yield before `SwellGoal` became eligible.
 
 Runtime GameTests now verify actual vanilla melee damage from both Zombies and Spiders after swarm movement yields, in addition to the existing Skeleton bow and Creeper fuse behavior checks.
+
+
+### Phase IV-H: persistent agent memory and action-linked visuals
+
+- Persist the seven-value per-agent task-experience vector in bounded entity NBT. Memory survives chunk unload/reload and world restart with the entity; runtime target coordinates, player identity, chat, inventory and transient navigation are not stored.
+- Restore the learning clock at the current game tick so unloaded time does not cause artificial experience decay.
+- Spread periodic memory writes deterministically across a 200-tick window.
+- Add a server config switch, `actionVisualsEnabled`, for lightweight task-linked vanilla visual cues.
+- Zombie engineers and gatherers visibly swing during real work; block particles are emitted only for actual work progress/completion.
+- Zombie carriers show pickup and successful Nest Core delivery cues; Spider scouts signal only after publishing valid reports.
+- Task changes emit small role/task-specific cues. Skeleton bow pose and Creeper fuse animation remain native vanilla behavior.
+- No GeckoLib dependency or renderer replacement is introduced; deterministic AI and vanilla combat/navigation ownership remain unchanged.
+- Unit tests cover task memory snapshots, experience-vector encode/decode, schema rejection, value bounds and offline-time handling.
+- Architecture notes: `docs/AGENT_MEMORY_AND_ACTIONS.md`.

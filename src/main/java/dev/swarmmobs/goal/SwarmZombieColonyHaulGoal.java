@@ -17,6 +17,7 @@ import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.algorithm.SwarmEngagementPolicy;
 import dev.swarmmobs.data.SwarmAttachments;
 import dev.swarmmobs.registry.SwarmNestBlocks;
+import dev.swarmmobs.visual.SwarmActionVisuals;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -62,6 +63,7 @@ public final class SwarmZombieColonyHaulGoal extends Goal {
     private long startTick;
     private long lastProgressTick;
     private double bestRemainingDistanceSq = Double.POSITIVE_INFINITY;
+    private boolean carryAnimationStarted;
 
     public SwarmZombieColonyHaulGoal(Zombie zombie) {
         this.zombie = zombie;
@@ -162,6 +164,8 @@ public final class SwarmZombieColonyHaulGoal extends Goal {
             scoutLead = null;
             home = targetHome;
             phase = Phase.TO_ITEM;
+            carryAnimationStarted = false;
+            SwarmActionVisuals.carrierTrack(level, zombie);
             return true;
         }
         // Direct sensing failed: use the nest's bounded Spider job board.
@@ -189,6 +193,8 @@ public final class SwarmZombieColonyHaulGoal extends Goal {
         item = null;
         home = targetHome;
         phase = Phase.TO_SCOUT;
+        carryAnimationStarted = false;
+        SwarmActionVisuals.carrierTrack(level, zombie);
         return true;
     }
 
@@ -290,17 +296,25 @@ public final class SwarmZombieColonyHaulGoal extends Goal {
         if (phase == Phase.TO_ITEM) {
             if (zombie.distanceToSqr(item) <= 2.25) {
                 phase = Phase.TO_NEST;
+                SwarmActionVisuals.carrierPickup(level, zombie);
+                carryAnimationStarted = false;
                 // Track progress independently on the return route.
                 lastProgressTick = tick;
                 bestRemainingDistanceSq = Double.POSITIVE_INFINITY;
                 zombie.getNavigation().stop();
                 rememberReturnPosition(item.blockPosition());
+                // Let the one-shot pickup cue finish before starting the carry loop.
+                return;
             } else {
                 follow(level, item.getX(), item.getY(), item.getZ(), tick);
                 return;
             }
         }
         if (phase == Phase.TO_NEST) {
+            if (!carryAnimationStarted) {
+                SwarmActionVisuals.carrierCarry(level, zombie);
+                carryAnimationStarted = true;
+            }
             rememberReturnPosition(zombie.blockPosition());
             // Reject abnormal external relocation: the same item MUST still
             // be physically near the worker. It may not be deposited from
@@ -325,6 +339,7 @@ public final class SwarmZombieColonyHaulGoal extends Goal {
                     int accepted = nest.acceptHaulDelivery(
                             item, SwarmConfig.NEST_HAUL_MAX_STACK.get());
                     if (accepted > 0) {
+                        SwarmActionVisuals.carrierDelivery(level, zombie, home, accepted);
                         if (scoutLead != null) nest.scoutBoard().discard(scoutLead.itemId());
                         if (SwarmConfig.NEST_PHEROMONES_ENABLED.get()) {
                             // Crowding-sensitive deposition: successful routes
@@ -415,6 +430,9 @@ public final class SwarmZombieColonyHaulGoal extends Goal {
 
     @Override
     public void stop() {
+        if (phase == Phase.TO_NEST && zombie.level() instanceof ServerLevel level) {
+            SwarmActionVisuals.carrierInterrupted(level, zombie);
+        }
         if (item != null) {
             // On interruption, leave a real item in the world, not a phantom
             // carried stack; an expired claim allows another worker to retry.
@@ -433,6 +451,7 @@ public final class SwarmZombieColonyHaulGoal extends Goal {
         scoutLead = null;
         home = null;
         phase = Phase.NONE;
+        carryAnimationStarted = false;
     }
 
     private static BlockPos scoutPosition(SwarmNestScoutBoard.Lead lead) {

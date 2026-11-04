@@ -1,6 +1,7 @@
 package dev.swarmmobs.bee;
 
 import dev.swarmmobs.config.SwarmConfig;
+import dev.swarmmobs.visual.SwarmActionVisuals;
 import java.util.Comparator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -70,6 +71,12 @@ public final class BeeColonyEvents {
                 bee.hasHive(), bee.hasNectar(), bee.hasStung(),
                 bee.getTarget() != null, Math.sqrt(hiveDistanceSquared));
         if (mode != BeeShelterPolicy.Mode.RETURN_TO_HIVE) return;
+
+        if (BeeCastePolicy.caste(bee.getUUID()) == BeeCastePolicy.Caste.GUARD) {
+            SwarmActionVisuals.beeGuardAlert(level, bee);
+        } else {
+            SwarmActionVisuals.beeReturnHome(level, bee);
+        }
 
         // Cancel only the optional remembered flower destination. The bee's
         // own hive is loaded and within a bounded radius; no chunk is requested.

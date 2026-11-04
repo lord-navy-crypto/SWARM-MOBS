@@ -12,7 +12,10 @@ import dev.swarmmobs.agent.SwarmPlannerContext;
 import dev.swarmmobs.ai.SwarmAiActiveState;
 import dev.swarmmobs.ai.SwarmAiShadowService;
 import dev.swarmmobs.ai.SwarmAiShadowState;
+import dev.swarmmobs.ai.SwarmAiLearningMemory;
+import dev.swarmmobs.ai.SwarmAiLearningService;
 import dev.swarmmobs.ai.ollama.OllamaStrategyProvider;
+import dev.swarmmobs.ai.ollama.OllamaModelAdvisor;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.colony.SwarmNestBlockEntity;
 import dev.swarmmobs.colony.SwarmNestColonyPolicy;
@@ -189,7 +192,9 @@ public final class SwarmCommands {
                 .then(Commands.literal("reset")
                         .executes(context -> resetExperiment(context.getSource())))
                 .then(Commands.literal("snapshot")
-                        .executes(context -> snapshotExperiment(context.getSource())));
+                        .executes(context -> snapshotExperiment(context.getSource())))
+                .then(Commands.literal("record")
+                        .executes(context -> recordExperiment(context.getSource())));
 
         var ai = Commands.literal("ai")
                 .requires(source -> source.hasPermission(2))
@@ -197,6 +202,10 @@ public final class SwarmCommands {
                         .executes(context -> aiStatus(context.getSource())))
                 .then(Commands.literal("models")
                         .executes(context -> aiModels(context.getSource())))
+                .then(Commands.literal("discover")
+                        .executes(context -> aiDiscover(context.getSource())))
+                .then(Commands.literal("diagnose")
+                        .executes(context -> aiDiscover(context.getSource())))
                 .then(Commands.literal("model")
                         .then(Commands.argument("name", StringArgumentType.greedyString())
                                 .executes(context -> aiModel(
@@ -209,6 +218,14 @@ public final class SwarmCommands {
                         .executes(context -> setAiEnabled(context.getSource(), false)))
                 .then(Commands.literal("shadow")
                         .executes(context -> runAiShadow(context.getSource())))
+                .then(Commands.literal("memory")
+                        .executes(context -> aiMemory(context.getSource())))
+                .then(Commands.literal("history")
+                        .executes(context -> aiHistory(context.getSource())))
+                .then(Commands.literal("transfer")
+                        .executes(context -> aiTransfer(context.getSource())))
+                .then(Commands.literal("evaluate")
+                        .executes(context -> runAiEvaluation(context.getSource())))
                 .then(Commands.literal("active")
                         .then(Commands.literal("on")
                                 .executes(context -> setAiActiveEnabled(context.getSource(), true)))
@@ -419,6 +436,34 @@ public final class SwarmCommands {
         return 1;
     }
 
+    private static int aiDiscover(CommandSourceStack source) {
+        source.sendSuccess(
+                () -> Component.literal("Discovering local Ollama version, installed models and recommendations. No downloads or model changes will be made."),
+                false
+        );
+        OllamaStrategyProvider.INSTANCE.discover().whenComplete((discovery, error) ->
+                source.getServer().execute(() -> {
+                    if (error != null) {
+                        source.sendFailure(Component.literal(
+                                "Ollama discovery failed: " + error.getMessage()
+                                        + ". Check that Ollama is running locally at "
+                                        + SwarmConfig.OLLAMA_BASE_URL.get()
+                                        + "; deterministic swarm behavior remains available."
+                        ));
+                        return;
+                    }
+                    for (String line : OllamaModelAdvisor.diagnosticLines(
+                            discovery,
+                            SwarmConfig.OLLAMA_BASE_URL.get(),
+                            SwarmConfig.OLLAMA_MODEL.get()
+                    )) {
+                        source.sendSuccess(() -> Component.literal(line), false);
+                    }
+                })
+        );
+        return 1;
+    }
+
     private static int runAiShadow(CommandSourceStack source) {
         if (SwarmAiShadowService.requestInFlight()) {
             source.sendFailure(Component.literal("A shadow AI request is already in flight."));
@@ -449,6 +494,138 @@ public final class SwarmCommands {
                                         decision.providerId(),
                                         decision.rationale()
                                 )),
+                                false
+                        );
+                    }
+                })
+        );
+        return 1;
+    }
+
+
+    private static int aiMemory(CommandSourceStack source) {
+        var memory = SwarmAiLearningMemory.get(source.getLevel());
+        var summary = memory.summary();
+        source.sendSuccess(
+                () -> Component.literal(String.format(
+                        java.util.Locale.ROOT,
+                        "AI learning memory: runs=%d, presets=%d, commDrop=%.3f, recoveryFailure=%.3f, searchSuccess=%.3f, avgReacquisition=%.2f ticks, engineeringCompletion=%.3f",
+                        summary.runCount(),
+                        summary.presetCount(),
+                        summary.communicationDropRate(),
+                        summary.recoveryFailureRate(),
+                        summary.searchSuccessRate(),
+                        summary.averageReacquisitionTicks(),
+                        summary.engineeringTaskCompletionRate()
+                )),
+                false
+        );
+        var latest = memory.lastEvaluation();
+        if (latest != null) {
+            source.sendSuccess(
+                    () -> Component.literal(
+                            "Latest Ollama evaluation (" + latest.evaluation().confidence()
+                                    + ", model=" + latest.model() + "): "
+                                    + latest.evaluation().summary()
+                    ),
+                    false
+            );
+        }
+        return 1;
+    }
+
+    private static int aiHistory(CommandSourceStack source) {
+        var records = SwarmAiLearningMemory.get(source.getLevel()).recentRuns(6);
+        if (records.isEmpty()) {
+            source.sendSuccess(() -> Component.literal(
+                    "No saved experiment snapshots. Start an experiment and use /swarmmobs experiment record."
+            ), false);
+            return 1;
+        }
+        source.sendSuccess(() -> Component.literal("Recent saved experiment snapshots:"), false);
+        for (var record : records) {
+            source.sendSuccess(
+                    () -> Component.literal(String.format(
+                            java.util.Locale.ROOT,
+                            "#%d %s seed=%d ticks=%d agents=%d commDrop=%.3f recoveryFailure=%.3f searchSuccess=%.3f",
+                            record.id(),
+                            record.preset(),
+                            record.seed(),
+                            record.elapsedTicks(),
+                            record.agentCount(),
+                            record.communicationDropRate(),
+                            record.recoveryFailureRate(),
+                            record.searchSuccessRate()
+                    )),
+                    false
+            );
+        }
+        return 1;
+    }
+
+    private static int aiTransfer(CommandSourceStack source) {
+        var insights = SwarmAiLearningMemory.get(source.getLevel()).experienceTransfer();
+        if (insights.isEmpty()) {
+            source.sendSuccess(() -> Component.literal(
+                    "No matched cross-experiment evidence yet. Repeat a supported preset pair with "
+                            + "the same seed, similar agent count, and similar duration."
+            ), false);
+            return 1;
+        }
+
+        source.sendSuccess(() -> Component.literal(
+                "Cross-experiment transfer evidence (paired associations, not causal proof):"
+        ), false);
+        for (var insight : insights) {
+            source.sendSuccess(() -> Component.literal(insight.displayLine()), false);
+        }
+        return 1;
+    }
+
+    private static int runAiEvaluation(CommandSourceStack source) {
+        if (SwarmAiLearningService.requestInFlight()) {
+            source.sendFailure(Component.literal("An Ollama learning evaluation is already in flight."));
+            return 0;
+        }
+        source.sendSuccess(
+                () -> Component.literal(
+                        "Ollama is evaluating saved experiment outcomes. Gameplay remains deterministic."
+                ),
+                false
+        );
+        SwarmAiLearningService.evaluate(source.getLevel()).whenComplete((evaluation, error) ->
+                source.getServer().execute(() -> {
+                    if (error != null) {
+                        source.sendFailure(Component.literal(
+                                "Experiment evaluation failed: " + error.getMessage()
+                        ));
+                        return;
+                    }
+                    source.sendSuccess(
+                            () -> Component.literal(
+                                    "Evaluation (" + evaluation.confidence() + "): " + evaluation.summary()
+                            ),
+                            false
+                    );
+                    for (var finding : evaluation.findings()) {
+                        source.sendSuccess(
+                                () -> Component.literal(
+                                        finding.metric() + " — " + finding.trend() + ": " + finding.evidence()
+                                ),
+                                false
+                        );
+                    }
+                    for (var suggestion : evaluation.nextExperiments()) {
+                        source.sendSuccess(
+                                () -> Component.literal(
+                                        "Suggested measurement: " + suggestion.preset() + " — " + suggestion.reason()
+                                ),
+                                false
+                        );
+                    }
+                    for (String note : evaluation.dataQualityNotes()) {
+                        source.sendSuccess(
+                                () -> Component.literal("Data quality: " + note),
                                 false
                         );
                     }
@@ -536,6 +713,35 @@ public final class SwarmCommands {
                 false
         );
         return 1;
+    }
+
+
+    private static int recordExperiment(CommandSourceStack source) {
+        var level = source.getLevel();
+        var metrics = SwarmExperimentMetrics.snapshot(level);
+        try {
+            var record = SwarmAiLearningMemory.get(level).record(
+                    metrics,
+                    SwarmExperimentManager.activePreset().name(),
+                    SwarmExperimentManager.experimentSeed(),
+                    level.getGameTime()
+            );
+            source.sendSuccess(
+                    () -> Component.literal(
+                            "Saved experiment #" + record.id()
+                                    + ": preset=" + record.preset()
+                                    + ", seed=" + record.seed()
+                                    + ", ticks=" + record.elapsedTicks()
+                                    + ", agents=" + record.agentCount()
+                                    + ". Use /swarmmobs ai evaluate after recording at least two runs."
+                    ),
+                    true
+            );
+            return 1;
+        } catch (IllegalStateException exception) {
+            source.sendFailure(Component.literal("Experiment snapshot not saved: " + exception.getMessage()));
+            return 0;
+        }
     }
 
     private static int openControlPanel(CommandSourceStack source) {
@@ -761,6 +967,7 @@ public final class SwarmCommands {
                                         "%.3f",
                                         state.taskExperience(state.currentTask())
                                 )
+                                + " taskExperienceProfile=" + state.taskExperienceSnapshot()
                                 + " separation=" + String.format(java.util.Locale.ROOT, "%.3f", state.separationMagnitude())
                                 + " cohesion=" + String.format(java.util.Locale.ROOT, "%.3f", state.cohesionMagnitude())
                                 + " alignment=" + String.format(java.util.Locale.ROOT, "%.3f", state.alignmentMagnitude())

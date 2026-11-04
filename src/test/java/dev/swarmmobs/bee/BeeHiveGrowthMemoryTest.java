@@ -1,29 +1,39 @@
 package dev.swarmmobs.bee;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BeeHiveGrowthMemoryTest {
-    @Test void onlyOneBeeCanClaimTheSameHiveInOneGameTick() {
-        var memory = new BeeHiveGrowthMemory();
-        assertTrue(memory.claim(123L, 400L));
-        assertFalse(memory.claim(123L, 400L));
-        assertTrue(memory.claim(123L, 800L));
+    private static final List<Long> TWO=List.of(0L, 1L);
+    @Test void connectedHivesShareSameTickClaim() {
+        var m=new BeeHiveGrowthMemory();
+        assertTrue(m.claimColony(TWO,100,2400));
+        assertFalse(m.claimColony(TWO,100,2400));
+        assertTrue(m.claimColony(TWO,101,2400));
     }
-
-    @Test void olderTicksCannotReopenAnAlreadyProcessedGrowthWindow() {
-        var memory = new BeeHiveGrowthMemory();
-        assertTrue(memory.claim(123L, 800L));
-        assertFalse(memory.claim(123L, 799L));
+    @Test void successfulGrowthCooldownAppliesToNewExtensions() {
+        var m=new BeeHiveGrowthMemory();
+        assertTrue(m.claimColony(TWO,100,2400));
+        m.recordExpansion(TWO,100);
+        var three=List.of(TWO.get(0), TWO.get(1), 2L);
+        assertFalse(m.claimColony(three,2499,2400));
+        assertTrue(m.claimColony(three,2500,2400));
     }
-
-    @Test void memoryExpiresAndRemainsBounded() {
-        var memory = new BeeHiveGrowthMemory();
-        memory.claim(1L, 100L);
-        assertEquals(0, memory.size(100L + BeeHiveGrowthMemory.MEMORY_TICKS));
-        for (int i = 0; i < BeeHiveGrowthMemory.MAX_TRACKED_HIVES + 20; i++) {
-            assertTrue(memory.claim(i + 10L, 20000L + i));
-        }
-        assertTrue(memory.size(30000L) <= BeeHiveGrowthMemory.MAX_TRACKED_HIVES);
+    @Test void maximumConfiguredCooldownSurvivesEvaluationMemoryExpiry() {
+        var m = new BeeHiveGrowthMemory();
+        m.recordExpansion(TWO, 100);
+        assertFalse(m.claimColony(TWO, 12100, 24000));
+        assertFalse(m.claimColony(TWO, 24099, 24000));
+        assertTrue(m.claimColony(TWO, 24100, 24000));
+    }
+    @Test void entriesExpireAndMemoryStaysBounded() {
+        var m=new BeeHiveGrowthMemory();
+        assertTrue(m.claimColony(TWO,100,2400));
+        assertEquals(2,m.size(100));
+        assertEquals(0,m.size(100+BeeHiveGrowthMemory.EVALUATION_MEMORY_TICKS));
+        for(int i=0;i<BeeHiveGrowthMemory.MAX_TRACKED_HIVES+10;i++)
+            m.claim((long) i, 20000L+i);
+        assertTrue(m.size(30000)<=BeeHiveGrowthMemory.MAX_TRACKED_HIVES);
     }
 }

@@ -14,6 +14,7 @@ import dev.swarmmobs.algorithm.SwarmPathEvidencePolicy;
 import dev.swarmmobs.algorithm.SwarmZombieEngineeringPolicy;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.data.SwarmAttachments;
+import dev.swarmmobs.visual.SwarmActionVisuals;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -55,6 +56,7 @@ public final class SwarmZombieEngineerGoal extends Goal {
     private BlockPos actionPos;
     private BlockState sourceState;
     private int progressTicks;
+    private boolean workCueStarted;
     private int requiredTicks;
     private boolean completed;
     private boolean succeeded;
@@ -168,6 +170,7 @@ public final class SwarmZombieEngineerGoal extends Goal {
         completed = false;
         succeeded = false;
         progressTicks = 0;
+        workCueStarted = false;
     }
 
     @Override
@@ -183,6 +186,10 @@ public final class SwarmZombieEngineerGoal extends Goal {
         }
 
         zombie.getNavigation().stop();
+        if (!workCueStarted && zombie.level() instanceof ServerLevel level) {
+            SwarmActionVisuals.engineerInspect(level, zombie);
+            workCueStarted = true;
+        }
 
         if (action == Action.BREAK) {
             tickBreak();
@@ -201,6 +208,9 @@ public final class SwarmZombieEngineerGoal extends Goal {
 
     @Override
     public void stop() {
+        if (zombie.level() instanceof ServerLevel level) {
+            SwarmActionVisuals.engineerInterrupted(level, zombie);
+        }
         if (action == Action.BREAK && actionPos != null) {
             zombie.level().destroyBlockProgress(zombie.getId(), actionPos, -1);
         }
@@ -220,6 +230,7 @@ public final class SwarmZombieEngineerGoal extends Goal {
         succeeded = false;
         activeTask = null;
         executionDeadlineTick = Long.MIN_VALUE;
+        workCueStarted = false;
     }
 
     private void armExecutionLease(long gameTick) {
@@ -902,6 +913,8 @@ public final class SwarmZombieEngineerGoal extends Goal {
         progressTicks++;
         int stage = Math.min(9, (int) Math.floor(10.0 * progressTicks / Math.max(1, requiredTicks)));
         zombie.level().destroyBlockProgress(zombie.getId(), actionPos, stage);
+        SwarmActionVisuals.workProgress(
+                (ServerLevel) zombie.level(), zombie, actionPos, sourceState, progressTicks);
 
         if (progressTicks < requiredTicks) {
             return;
@@ -918,6 +931,8 @@ public final class SwarmZombieEngineerGoal extends Goal {
 
         boolean destroyed = zombie.level().destroyBlock(actionPos, false, zombie);
         zombie.level().destroyBlockProgress(zombie.getId(), actionPos, -1);
+        SwarmActionVisuals.workCompleted(
+                (ServerLevel) zombie.level(), zombie, actionPos, sourceState, destroyed);
 
         if (destroyed) {
             SwarmAgentState agentState =
@@ -940,6 +955,10 @@ public final class SwarmZombieEngineerGoal extends Goal {
 
     private void tickBridge() {
         progressTicks++;
+        if (actionPos != null && sourceState != null) {
+            SwarmActionVisuals.workProgress(
+                    (ServerLevel) zombie.level(), zombie, actionPos, sourceState, progressTicks);
+        }
         if (progressTicks < requiredTicks) {
             return;
         }
@@ -956,6 +975,8 @@ public final class SwarmZombieEngineerGoal extends Goal {
         }
 
         boolean placed = zombie.level().setBlockAndUpdate(actionPos, sourceState);
+        SwarmActionVisuals.workCompleted(
+                (ServerLevel) zombie.level(), zombie, actionPos, sourceState, placed);
         if (placed) {
             state.consumeEngineeringBlock();
         }

@@ -19,6 +19,9 @@ active AI may bias bounded high-level task demand but does not directly control
 per-tick movement, attacks, paths, or block coordinates.
 '''
 
+[[mixins]]
+config="swarmmobs.mixins.json"
+
 [[dependencies.${mod_id}]]
 modId="neoforge"
 type="required"
@@ -33,6 +36,14 @@ versionRange="${minecraft_version_range}"
 ordering="NONE"
 side="BOTH"
 
+
+[[dependencies.${mod_id}]]
+modId="geckolib"
+type="required"
+reason="Swarm Mobs uses GeckoLib for synchronized, event-driven role and coordination animations."
+versionRange="[${geckolib_version},5)"
+ordering="AFTER"
+side="BOTH"
 
 [[dependencies.${mod_id}]]
 modId="cloth_config"

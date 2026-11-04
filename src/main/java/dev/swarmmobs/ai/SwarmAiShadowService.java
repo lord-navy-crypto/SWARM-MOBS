@@ -27,6 +27,12 @@ public final class SwarmAiShadowService {
             ServerLevel level,
             boolean applyActive
     ) {
+        if (SwarmAiLearningService.requestInFlight()) {
+            return CompletableFuture.failedFuture(
+                    new IllegalStateException("An Ollama learning evaluation is already in flight.")
+            );
+        }
+
         if (!SwarmConfig.EXTERNAL_AI_ENABLED.get()) {
             var fallback = SwarmStrategyDecision.baseline(
                     "deterministic-fallback",

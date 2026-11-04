@@ -21,6 +21,8 @@ The Bee module integrates with vanilla Minecraft Bees, Bee Nests, and Beehives w
 - space pressure from observed hive occupancy;
 - local hostile-mob presence.
 
+Recent assignments are counted only within the same native hive and a 400-tick refresh window. Demand-derived headcount targets reduce new recruitment into saturated tasks while allowing incumbents to stay unless a task is materially overstaffed. This uses the existing assignment cache and adds no entity scan.
+
 The runtime does not invent brood or fatigue readings when vanilla exposes no reliable sensor for them. Task preferences influence flower recruitment priority only; they do not replace vanilla Bee goals or falsely claim to implement nursing/guarding animations.
 
 ### Connected hive growth

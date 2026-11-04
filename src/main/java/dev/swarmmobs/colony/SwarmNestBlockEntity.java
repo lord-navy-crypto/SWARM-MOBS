@@ -28,6 +28,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.AABB;
 
+import software.bernie.geckolib.animatable.GeoBlockEntity;
+import software.bernie.geckolib.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.animation.AnimatableManager;
+import software.bernie.geckolib.animation.AnimationController;
+import software.bernie.geckolib.animation.RawAnimation;
+import software.bernie.geckolib.util.GeckoLibUtil;
+
 import java.util.List;
 
 /**
@@ -35,12 +42,21 @@ import java.util.List;
  * spawner. One core executes at most one local cycle per 200 game ticks.
  * No chunk tickets, terrain destruction, global scans, or asynchronous world IO.
  */
-public final class SwarmNestBlockEntity extends BlockEntity {
+public final class SwarmNestBlockEntity extends BlockEntity implements GeoBlockEntity {
     private static final int CYCLE_TICKS = 200;
     private static final int POPULATION_RADIUS = 14;
     private static final int RESOURCE_RADIUS = 3;
     private static final int[] DX = {2, -2, 0, 0, 2, -2, 2, -2};
     private static final int[] DZ = {0, 0, 2, -2, 2, 2, -2, -2};
+
+    private static final RawAnimation NEST_IDLE =
+            RawAnimation.begin().thenLoop("animation.nest_signal.idle");
+    private static final RawAnimation NEST_SCOUT_REPORT =
+            RawAnimation.begin().thenPlay("animation.nest_signal.report");
+    private static final RawAnimation NEST_DELIVERY =
+            RawAnimation.begin().thenPlay("animation.nest_signal.delivery");
+    private static final RawAnimation NEST_RALLY =
+            RawAnimation.begin().thenPlay("animation.nest_signal.rally");
     // True only for an automatically grown Nest Core extension. Never runs
     // an independent economy/spawner; persisted to prevent duplicate colonies.
     private boolean connectedExtension;
@@ -85,8 +101,40 @@ public final class SwarmNestBlockEntity extends BlockEntity {
     private final SwarmNestPheromoneField pheromoneField = new SwarmNestPheromoneField();
     private int leaderMarks;
 
+    private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
+    private long nextColonyAnimationTick = Long.MIN_VALUE;
+
     public SwarmNestBlockEntity(BlockPos pos, BlockState state) {
         super(SwarmNestBlockEntities.NEST.get(), pos, state);
+    }
+
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(this, "colony", 3,
+                state -> state.setAndContinue(NEST_IDLE))
+                .triggerableAnim("scout_report", NEST_SCOUT_REPORT)
+                .triggerableAnim("delivery", NEST_DELIVERY)
+                .triggerableAnim("rally", NEST_RALLY));
+    }
+
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache() {
+        return geoCache;
+    }
+
+    /**
+     * Play a short client-visible cue for a completed colony event.
+     * The cooldown bounds network traffic when several workers report at once.
+     * This is presentation only; it never changes the planner or world state.
+     */
+    public void triggerColonyAnimation(String animation, long now) {
+        if (!(level instanceof ServerLevel)
+                || !SwarmConfig.ACTION_VISUALS_ENABLED.get()
+                || now < 0 || now < nextColonyAnimationTick) {
+            return;
+        }
+        nextColonyAnimationTick = now + 5;
+        triggerAnim("colony", animation);
     }
 
     public boolean isConnectedExtension() { return connectedExtension; }
@@ -240,11 +288,15 @@ public final class SwarmNestBlockEntity extends BlockEntity {
             return false;
         }
         BlockPos site = item.blockPosition();
-        return scoutBoard.publish(item.getUUID(),
+        boolean published = scoutBoard.publish(item.getUUID(),
                 new SwarmNestScoutBoard.Position(site.getX(), site.getY(), site.getZ()),
                 classify(item.getItem()), now,
                 new SwarmNestScoutBoard.Position(
                         worldPosition.getX(), worldPosition.getY(), worldPosition.getZ()));
+        if (published) {
+            triggerColonyAnimation("scout_report", now);
+        }
+        return published;
     }
     public int leaderMarks() { return leaderMarks; }
 
@@ -377,6 +429,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
             hauledItems += accepted;
             if (level instanceof ServerLevel server) {
                 laborFeedback.succeeded(cargoKind, accepted, server.getGameTime());
+                triggerColonyAnimation("delivery", server.getGameTime());
             }
             setChanged();
         }
@@ -951,6 +1004,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
                 crown(mob, "entity.swarmmobs.nest_regent_zombie");
                 leaderMarks |= 1;
                 setChanged();
+                if (level != null) triggerColonyAnimation("rally", level.getGameTime());
             });
         }
         if ((leaderMarks & 2) == 0 && !skeletonPresent) {
@@ -958,6 +1012,7 @@ public final class SwarmNestBlockEntity extends BlockEntity {
                 crown(mob, "entity.swarmmobs.nest_regent_skeleton");
                 leaderMarks |= 2;
                 setChanged();
+                if (level != null) triggerColonyAnimation("rally", level.getGameTime());
             });
         }
     }

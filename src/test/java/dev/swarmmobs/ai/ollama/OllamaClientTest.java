@@ -42,4 +42,53 @@ class OllamaClientTest {
                 () -> OllamaClient.localApiUri("file://localhost/tmp", "/api/chat")
         );
     }
+    @Test
+    void rejectsBaseUrlsWithQueryOrFragment() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> OllamaClient.localApiUri("http://localhost:11434?token=abc", "/api/tags")
+        );
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> OllamaClient.localApiUri("http://localhost:11434#fragment", "/api/tags")
+        );
+    }
+
+    @Test
+    void parsesOllamaVersion() {
+        assertEquals("0.5.7", OllamaClient.parseVersion("""
+                {"version":"0.5.7"}
+                """));
+    }
+
+    @Test
+    void parsesModelMetadataFromTagsResponse() {
+        var models = OllamaClient.parseModelDetails("""
+                {"models":[
+                  {
+                    "name":"qwen2.5:7b-instruct",
+                    "size":4683075271,
+                    "modified_at":"2026-11-03T10:00:00Z",
+                    "details":{
+                      "family":"qwen2",
+                      "parameter_size":"7.6B",
+                      "quantization_level":"Q4_K_M"
+                    }
+                  }
+                ]}
+                """);
+
+        assertEquals(1, models.size());
+        assertEquals("qwen2.5:7b-instruct", models.getFirst().name());
+        assertEquals(4683075271L, models.getFirst().sizeBytes());
+        assertEquals("qwen2", models.getFirst().family());
+        assertEquals("7.6B", models.getFirst().parameterSize());
+        assertEquals("Q4_K_M", models.getFirst().quantizationLevel());
+    }
+
+    @Test
+    void returnsEmptyModelListForEmptyTagsResponse() {
+        assertTrue(OllamaClient.parseModelDetails("{\"models\":[]}").isEmpty());
+    }
+
 }

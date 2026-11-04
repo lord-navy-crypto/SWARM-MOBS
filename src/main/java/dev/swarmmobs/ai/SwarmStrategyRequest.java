@@ -18,5 +18,21 @@ public record SwarmStrategyRequest(
         long roleReassignments,
         int activeSearchEpisodes,
         double searchSuccessRate,
-        double averageReacquisitionTicks
+        double averageReacquisitionTicks,
+        int playerProfiles,
+        int playerAttackSamples,
+        String playerDominantStyle,
+        double playerMeleeShare,
+        double playerProjectileShare,
+        double playerExplosiveShare,
+        double playerFireShare,
+        double playerMagicShare,
+        double playerOtherShare,
+        int playerMotionProfiles,
+        int playerMotionSamples,
+        String playerDominantMotion,
+        double playerStationaryShare,
+        double playerWalkingShare,
+        double playerSprintingShare,
+        double playerErraticShare
 ) {}

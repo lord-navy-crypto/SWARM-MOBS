@@ -27,6 +27,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue FORMATION_SLOTS;
     public static final ModConfigSpec.IntValue FORMATION_SLOT_HYSTERESIS_TICKS;
     public static final ModConfigSpec.IntValue ROLE_HYSTERESIS_TICKS;
+    public static final ModConfigSpec.IntValue TACTICAL_PATTERN_HYSTERESIS_TICKS;
     public static final ModConfigSpec.DoubleValue FORMATION_RADIUS;
     public static final ModConfigSpec.DoubleValue SEPARATION_RADIUS;
     public static final ModConfigSpec.DoubleValue SEPARATION_WEIGHT;
@@ -52,6 +53,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.DoubleValue NAV_RECOVERY_LATERAL_DISTANCE;
     public static final ModConfigSpec.IntValue NAV_RECOVERY_DURATION_TICKS;
     public static final ModConfigSpec.BooleanValue NAV_OBSTACLE_AVOIDANCE_ENABLED;
+    public static final ModConfigSpec.BooleanValue SPIDER_TERRAIN_ADAPTATION_ENABLED;
     public static final ModConfigSpec.DoubleValue NAV_OBSTACLE_LOOKAHEAD;
     public static final ModConfigSpec.DoubleValue NAV_OBSTACLE_LATERAL_DISTANCE;
     public static final ModConfigSpec.IntValue NAV_OBSTACLE_HOLD_TICKS;
@@ -100,6 +102,17 @@ public final class SwarmConfig {
     public static final ModConfigSpec.BooleanValue BEE_FLOWER_RECRUITMENT_ENABLED;
     public static final ModConfigSpec.BooleanValue BEE_CONNECTED_HIVE_GROWTH_ENABLED;
     public static final ModConfigSpec.BooleanValue BEE_COLONY_SHELTER_ENABLED;
+    public static final ModConfigSpec.IntValue BEE_HIVE_MAX_EXTENSIONS;
+    public static final ModConfigSpec.IntValue BEE_HIVE_WAX_COST;
+    public static final ModConfigSpec.IntValue BEE_HIVE_HONEY_RESERVE;
+    public static final ModConfigSpec.IntValue BEE_HIVE_GROWTH_COOLDOWN_TICKS;
+    public static final ModConfigSpec.IntValue BEE_HIVE_CAPACITY;
+    public static final ModConfigSpec.BooleanValue BEE_COLONY_REPRODUCTION_ENABLED;
+    public static final ModConfigSpec.BooleanValue BEE_HONEY_BONUS_ENABLED;
+    public static final ModConfigSpec.IntValue BEE_COLONY_MAX_POPULATION;
+    public static final ModConfigSpec.IntValue BEE_REPRODUCTION_INTERVAL_TICKS;
+    public static final ModConfigSpec.IntValue BEE_AGE_SPEED_MULTIPLIER;
+    public static final ModConfigSpec.IntValue BEE_HONEY_PRODUCTION_MULTIPLIER;
     public static final ModConfigSpec.IntValue NEST_MAX_POPULATION;
     public static final ModConfigSpec.BooleanValue NEST_ADAPTIVE_RECRUITMENT;
     public static final ModConfigSpec.DoubleValue NEST_WORKER_TARGET_SHARE;
@@ -108,6 +121,7 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue NEST_BUILD_INTERVAL_TICKS;
     public static final ModConfigSpec.IntValue NEST_MIN_GROUP_SIZE;
     public static final ModConfigSpec.BooleanValue DIVISION_OF_LABOR_ENABLED;
+    public static final ModConfigSpec.BooleanValue LOCAL_TASK_AUCTION_ENABLED;
     public static final ModConfigSpec.IntValue SPECIALIZATION_MIN_HOLD_TICKS;
     public static final ModConfigSpec.DoubleValue SPECIALIZATION_EXPERIENCE_GAIN;
     public static final ModConfigSpec.DoubleValue SPECIALIZATION_EXPERIENCE_DECAY;
@@ -122,6 +136,8 @@ public final class SwarmConfig {
     public static final ModConfigSpec.IntValue COMMUNICATION_LATENCY_TICKS;
     public static final ModConfigSpec.DoubleValue COMMUNICATION_PACKET_DROP_RATE;
     public static final ModConfigSpec.IntValue COMMUNICATION_EXPERIMENT_SEED;
+    public static final ModConfigSpec.BooleanValue COLLECTIVE_OBSERVATION_FUSION_ENABLED;
+    public static final ModConfigSpec.IntValue COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS;
 
     public static final ModConfigSpec.BooleanValue EXTERNAL_AI_ENABLED;
     public static final ModConfigSpec.BooleanValue EXTERNAL_AI_ACTIVE_ENABLED;
@@ -131,6 +147,8 @@ public final class SwarmConfig {
     public static final ModConfigSpec.ConfigValue<String> OLLAMA_MODEL;
     public static final ModConfigSpec.IntValue OLLAMA_TIMEOUT_MS;
     public static final ModConfigSpec.ConfigValue<String> OLLAMA_KEEP_ALIVE;
+    public static final ModConfigSpec.BooleanValue ACTION_VISUALS_ENABLED;
+    public static final ModConfigSpec.BooleanValue PLAYER_LEARNING_ENABLED;
 
     public static final ModConfigSpec SPEC;
 
@@ -176,6 +194,10 @@ public final class SwarmConfig {
         ROLE_HYSTERESIS_TICKS = BUILDER
                 .comment("How long a different tactical responsibility must remain stable before role reassignment.")
                 .defineInRange("roleHysteresisTicks", 12, 0, 200);
+
+        TACTICAL_PATTERN_HYSTERESIS_TICKS = BUILDER
+                .comment("How long a different encounter geometry must remain supported by fresh observations before an agent changes its tactical pattern.")
+                .defineInRange("tacticalPatternHysteresisTicks", 12, 0, 100);
 
         FORMATION_RADIUS = BUILDER
                 .comment("Nominal ring radius around the shared target.")
@@ -276,6 +298,10 @@ public final class SwarmConfig {
         NAV_OBSTACLE_AVOIDANCE_ENABLED = BUILDER
                 .comment("Enable short-range terrain probing before issuing swarm navigation destinations.")
                 .define("navObstacleAvoidanceEnabled", true);
+
+        SPIDER_TERRAIN_ADAPTATION_ENABLED = BUILDER
+                .comment("Let vanilla Spider WallClimberNavigation handle safe 2-5 block vertical faces instead of forcing a horizontal detour. Requires local landing headroom; OFF restores generic obstacle detours.")
+                .define("spiderTerrainAdaptationEnabled", true);
 
         NAV_OBSTACLE_LOOKAHEAD = BUILDER
                 .comment("Forward probe and temporary detour distance, in blocks, for local obstacle avoidance.")
@@ -457,8 +483,52 @@ public final class SwarmConfig {
                 .define("nestConnectedCoreGrowthEnabled", false);
 
         BEE_CONNECTED_HIVE_GROWTH_ENABLED = BUILDER
-                .comment("EXPERIMENTAL: expand vanilla bee nests or beehives into adjacent air when full of bees and full of honey. Consumes the parent's honey level; OFF by default.")
+                .comment("EXPERIMENTAL: expand face-connected vanilla bee nests/beehives. Requires full connected housing, honey above a winter reserve and dropped vanilla honeycomb as wax. Native hive occupancy is never modified. OFF by default.")
                 .define("beeConnectedHiveGrowthEnabled", false);
+
+        BEE_HIVE_MAX_EXTENSIONS = BUILDER
+                .comment("Maximum additional vanilla hive blocks in one connected bee colony; scans fail closed above this bounded limit.")
+                .defineInRange("beeHiveMaxExtensions", 8, 1, 32);
+
+        BEE_HIVE_WAX_COST = BUILDER
+                .comment("Vanilla honeycomb item count consumed per successful hive extension. Honeycomb must be dropped within eight blocks of a member hive.")
+                .defineInRange("beeHiveWaxCost", 2, 1, 16);
+
+        BEE_HIVE_HONEY_RESERVE = BUILDER
+                .comment("Honey levels reserved per hive for colony survival. Expansion spends one level only from a hive above this reserve.")
+                .defineInRange("beeHiveHoneyReserve", 3, 0, 5);
+
+        BEE_HIVE_GROWTH_COOLDOWN_TICKS = BUILDER
+                .comment("Minimum ticks between successful physical hive extensions for one connected bee colony.")
+                .defineInRange("beeHiveGrowthCooldownTicks", 2400, 400, 24000);
+
+        BEE_HIVE_CAPACITY = BUILDER
+                .comment("Configured occupants per vanilla bee nest or beehive. The runtime mixin applies this limit to vanilla hive entry.")
+                .defineInRange("beeHiveCapacity", 8, 3, 16);
+
+        BEE_COLONY_REPRODUCTION_ENABLED = BUILDER
+                .comment("Allow loaded, observed vanilla bee colonies to recruit a baby Bee when flower and honey reserves are sufficient.")
+                .define("beeColonyReproductionEnabled", defaultColonyExperimentsEnabled());
+
+        BEE_HONEY_BONUS_ENABLED = BUILDER
+                .comment("Add bounded bonus honey production when a nectar-carrying Bee returns to its loaded hive; scales with stored workers.")
+                .define("beeHoneyBonusEnabled", defaultColonyExperimentsEnabled());
+
+        BEE_COLONY_MAX_POPULATION = BUILDER
+                .comment("Maximum combined stored and loaded living Bees in one connected vanilla hive colony.")
+                .defineInRange("beeColonyMaxPopulation", 48, 3, 128);
+
+        BEE_REPRODUCTION_INTERVAL_TICKS = BUILDER
+                .comment("Minimum ticks between colony-born baby Bees. Lower values recruit workers faster.")
+                .defineInRange("beeReproductionIntervalTicks", 3600, 600, 24000);
+
+        BEE_AGE_SPEED_MULTIPLIER = BUILDER
+                .comment("Multiplier for vanilla Bee baby maturation and post-breeding cooldown countdown.")
+                .defineInRange("beeAgeSpeedMultiplier", 2, 1, 8);
+
+        BEE_HONEY_PRODUCTION_MULTIPLIER = BUILDER
+                .comment("Multiplier for bounded bonus honey production. The rate also scales with the number of Bees stored in the hive.")
+                .defineInRange("beeHoneyProductionMultiplier", 2, 1, 5);
 
         BEE_COLONY_SHELTER_ENABLED = BUILDER
                 .comment("EXPERIMENTAL: locally warn unladen vanilla Bees about visible hostile mobs near their own hive and let a deterministic subset return home. Does not assign attack targets; OFF by default.")
@@ -500,16 +570,20 @@ public final class SwarmConfig {
                 .comment("Enable dynamic local task demand, bidding, and within-species specialization.")
                 .define("enabled", true);
 
+        LOCAL_TASK_AUCTION_ENABLED = BUILDER
+                .comment("Use deterministic same-target peer matching so each nearby agent receives at most one task and task headcounts remain bounded.")
+                .define("localAuctionEnabled", true);
+
         SPECIALIZATION_MIN_HOLD_TICKS = BUILDER
                 .comment("Minimum time a dynamic specialization is held before switching to another task.")
                 .defineInRange("minHoldTicks", 30, 0, 400);
 
         SPECIALIZATION_EXPERIENCE_GAIN = BUILDER
-                .comment("Experience reinforcement added to the active task on each planning update.")
+                .comment("Experience reinforcement per six game ticks spent on the active task; independent of planner update frequency.")
                 .defineInRange("experienceGain", 0.025, 0.0, 0.25);
 
         SPECIALIZATION_EXPERIENCE_DECAY = BUILDER
-                .comment("Multiplicative experience retention per planning update; values below 1 slowly forget inactive specialization.")
+                .comment("Experience retention per six game ticks; values below 1 slowly forget inactive specialization independent of planner update frequency.")
                 .defineInRange("experienceDecay", 0.995, 0.90, 1.0);
 
         BUILDER.pop();
@@ -556,6 +630,14 @@ public final class SwarmConfig {
                 .comment("Seed mixed into deterministic packet-drop decisions for reproducible experiments.")
                 .defineInRange("experimentSeed", 0, Integer.MIN_VALUE, Integer.MAX_VALUE);
 
+        COLLECTIVE_OBSERVATION_FUSION_ENABLED = BUILDER
+                .comment("Fuse fresh, spatially consistent observations from nearby swarm agents into one bounded shared estimate. Fusion never refreshes the source timestamp or reads hidden live target state.")
+                .define("observationFusionEnabled", true);
+
+        COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS = BUILDER
+                .comment("Maximum source-observation age difference, in ticks, for collective target fusion.")
+                .defineInRange("observationFusionWindowTicks", 4, 0, 20);
+
         BUILDER.pop();
 
         BUILDER.push("externalAi");
@@ -591,6 +673,22 @@ public final class SwarmConfig {
         OLLAMA_KEEP_ALIVE = BUILDER
                 .comment("Ollama keep_alive value used for shadow strategy requests.")
                 .define("ollamaKeepAlive", "5m");
+
+        BUILDER.pop();
+
+        BUILDER.push("visuals");
+
+        ACTION_VISUALS_ENABLED = BUILDER
+                .comment("Show task-linked vanilla arm swings and small particle cues for engineering, hauling, scouting and task changes. Does not change AI decisions or attack timing.")
+                .define("actionVisualsEnabled", true);
+
+        BUILDER.pop();
+
+        BUILDER.push("playerLearning");
+
+        PLAYER_LEARNING_ENABLED = BUILDER
+                .comment("Enable session-local, decaying player combat-style and movement-style learning. Only broad categories and motion summaries are retained in memory; no raw histories, coordinates, chat, inventory or uploads.")
+                .define("enabled", true);
 
         BUILDER.pop();
 

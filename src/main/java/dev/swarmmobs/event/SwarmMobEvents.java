@@ -5,14 +5,17 @@ import dev.swarmmobs.agent.SwarmAgentProfile;
 import dev.swarmmobs.agent.SwarmBehaviorMode;
 import dev.swarmmobs.agent.SwarmAgentProfiles;
 import dev.swarmmobs.agent.SwarmAgentState;
+import dev.swarmmobs.agent.SwarmAgentMemory;
 import dev.swarmmobs.agent.SwarmLocalComposition;
 import dev.swarmmobs.agent.SwarmRole;
 import dev.swarmmobs.agent.SwarmSpecialization;
 import dev.swarmmobs.agent.SwarmTaskType;
 import dev.swarmmobs.algorithm.CapabilitySlotAllocator;
 import dev.swarmmobs.algorithm.SwarmLocalRoleCoveragePolicy;
+import dev.swarmmobs.algorithm.SwarmFrontlineRotationPolicy;
 import dev.swarmmobs.algorithm.SwarmCombatPlanner;
 import dev.swarmmobs.algorithm.SwarmAdaptiveTacticsPolicy;
+import dev.swarmmobs.algorithm.SwarmTacticalHysteresisPolicy;
 import dev.swarmmobs.algorithm.SwarmPackDecongestionPolicy;
 import dev.swarmmobs.algorithm.SwarmCrowdWaypointWorldPolicy;
 import dev.swarmmobs.algorithm.SwarmCombatBusyPolicy;
@@ -29,6 +32,7 @@ import dev.swarmmobs.algorithm.SwarmSkeletonSightlinePolicy;
 import dev.swarmmobs.algorithm.SwarmOptionalGameWaypointCommitmentPolicy;
 import dev.swarmmobs.algorithm.SwarmEngagementPolicy;
 import dev.swarmmobs.algorithm.SwarmDivisionOfLaborPolicy;
+import dev.swarmmobs.algorithm.SwarmLocalTaskAuctionPolicy;
 import dev.swarmmobs.algorithm.SwarmEngineeringEscalationPolicy;
 import dev.swarmmobs.algorithm.SwarmSpecializationRolePolicy;
 import dev.swarmmobs.algorithm.SwarmTaskDemandPolicy;
@@ -55,9 +59,14 @@ import dev.swarmmobs.ai.SwarmAiActiveState;
 import dev.swarmmobs.ai.SwarmAiControlPolicy;
 import dev.swarmmobs.ai.SwarmAiRoleBiasPolicy;
 import dev.swarmmobs.ai.SwarmAiTaskDemandPolicy;
+import dev.swarmmobs.ai.SwarmPlayerStylePolicy;
+import dev.swarmmobs.ai.SwarmPlayerStyleRegistry;
+import dev.swarmmobs.ai.SwarmPlayerMotionPolicy;
+import dev.swarmmobs.ai.SwarmPlayerMotionRegistry;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.data.SwarmAttachments;
 import dev.swarmmobs.debug.SwarmDebugParticles;
+import dev.swarmmobs.visual.SwarmActionVisuals;
 import dev.swarmmobs.goal.SwarmColonyRallyGoal;
 import dev.swarmmobs.goal.SwarmApproachGoal;
 import dev.swarmmobs.goal.SwarmIdleNestGoal;
@@ -108,6 +117,12 @@ public final class SwarmMobEvents {
                 || !SwarmAgentProfiles.isSupported(mob)) {
             return;
         }
+
+        SwarmAgentMemory.restore(
+                mob.getPersistentData(),
+                mob.getData(SwarmAttachments.AGENT_STATE.get()),
+                mob.level().getGameTime()
+        );
 
         if (mob instanceof Skeleton skeleton) {
             mob.goalSelector.addGoal(0, new SwarmSkeletonBowGoal(skeleton));
@@ -162,6 +177,14 @@ public final class SwarmMobEvents {
         if (mob.isNoAi()) return;
 
         SwarmAgentState state = mob.getData(SwarmAttachments.AGENT_STATE.get());
+        if (SwarmAgentMemory.shouldPersist(gameTick, mob.getUUID().hashCode())) {
+            SwarmAgentMemory.save(
+                    mob.getPersistentData(),
+                    state,
+                    level.dimension().location().toString(),
+                    gameTick
+            );
+        }
         int interval = SwarmConfig.PLAN_INTERVAL_TICKS.get();
 
         if (!state.planningScheduleInitialized()) {
@@ -183,6 +206,12 @@ public final class SwarmMobEvents {
                 && mob.getTarget() == null) {
             state.scheduleNextPlan(gameTick, Math.max(interval, 20));
             state.updateEngagement(false,false,gameTick);
+            state.updateTaskExperience(
+                    null,
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get(),
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get(),
+                    gameTick
+            );
             state.clearLocalPlan(0);
             return;
         }
@@ -209,6 +238,12 @@ public final class SwarmMobEvents {
             state.updateTacticalSquadTelemetry(0, 0);
             state.recordSearchFailure();
             state.forgetTarget();
+            state.updateTaskExperience(
+                    null,
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get(),
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get(),
+                    gameTick
+            );
             state.clearLocalPlan(movementNeighbors.size());
             if (mob.getTarget() instanceof Player) {
                 mob.setTarget(null);
@@ -261,6 +296,9 @@ public final class SwarmMobEvents {
         state.updateEngagement(true,squadCombat,gameTick);
         if (selection.direct()) {
             state.recordDirectReacquisition(gameTick, observation.targetId());
+            if (SwarmConfig.PLAYER_LEARNING_ENABLED.get()) {
+                SwarmPlayerMotionRegistry.observe(level, observation, gameTick);
+            }
         }
         int slots = SwarmConfig.FORMATION_SLOTS.get();
 
@@ -364,6 +402,29 @@ public final class SwarmMobEvents {
                 ? 1.0
                 : activeStrategy.searchRadiusMultiplier();
 
+        boolean playerLearningEnabled = SwarmConfig.PLAYER_LEARNING_ENABLED.get();
+        var learnedAttackStyle = SwarmPlayerStylePolicy.choose(
+                playerLearningEnabled
+                        ? SwarmPlayerStyleRegistry.snapshot(level, observation.targetId(), gameTick)
+                        : null,
+                playerLearningEnabled);
+        var learnedMovementStyle = SwarmPlayerMotionPolicy.choose(
+                playerLearningEnabled
+                        ? SwarmPlayerMotionRegistry.snapshot(level, observation.targetId(), gameTick)
+                        : null,
+                playerLearningEnabled);
+        aiFormationMultiplier = Math.max(0.70, Math.min(1.50,
+                aiFormationMultiplier * learnedAttackStyle.formationRadiusMultiplier()
+                        * learnedMovementStyle.formationRadiusMultiplier()));
+        aiSeparationMultiplier = Math.max(0.70, Math.min(1.50,
+                aiSeparationMultiplier * learnedAttackStyle.separationMultiplier()
+                        * learnedMovementStyle.separationMultiplier()));
+        aiCohesionMultiplier = Math.max(0.70, Math.min(1.50,
+                aiCohesionMultiplier * learnedAttackStyle.cohesionMultiplier()
+                        * learnedMovementStyle.cohesionMultiplier()));
+        aiSearchRadiusMultiplier = Math.max(0.80, Math.min(1.40,
+                aiSearchRadiusMultiplier * learnedMovementStyle.searchRadiusMultiplier()));
+
         boolean searchMode = !selection.direct()
                 && confidence < SwarmConfig.SEARCH_CONFIDENCE_THRESHOLD.get();
         boolean creeperFusing = mob instanceof Creeper creeper
@@ -383,7 +444,7 @@ public final class SwarmMobEvents {
             if (!zombieColonyEngineeringEnabled
                     && (state.currentTask() == SwarmTaskType.ENGINEERING
                         || state.currentTask() == SwarmTaskType.MATERIAL)) {
-                state.resetActiveSpecialization();
+                state.resetActiveSpecialization(gameTick);
             }
             boolean routeBlocked = zombieColonyEngineeringEnabled
                     && SwarmEngineeringEscalationPolicy.shouldEscalate(
@@ -393,30 +454,15 @@ public final class SwarmMobEvents {
                     state.plannerFeasibleCount()
             );
 
-            SwarmTaskDemandPolicy.Signals demandSignals =
-                    new SwarmTaskDemandPolicy.Signals(
-                            searchMode,
-                            routeBlocked,
-                            zombieColonyEngineeringEnabled
-                                    && state.carriedEngineeringBlockCount() > 0,
-                            composition.dedicatedFlankCoverage(),
-                            composition.hasBreacher(),
-                            composition.rangedSupportCount() > 0,
-                            confidence
-                    );
-
-            boolean combatBusy = SwarmCombatBusyPolicy.isBusy(
-                    mob.getTarget() != null,
-                    mob.getTarget() != null && mob.hasLineOfSight(mob.getTarget()),
-                    mob.getTarget() == null
-                            ? Double.POSITIVE_INFINITY
-                            : mob.distanceToSqr(mob.getTarget()),
-                    SwarmConfig.RELEASE_TO_VANILLA_DISTANCE.get()
-            );
+            boolean localTaskAuctionEnabled = SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.get();
+            boolean squadRouteBlocked = routeBlocked;
+            boolean squadHasEngineeringMaterial = zombieColonyEngineeringEnabled
+                    && state.carriedEngineeringBlockCount() > 0;
+            double squadConfidence = confidence;
 
             EnumMap<SwarmTaskType, Integer> peerTaskOccupancy =
                     new EnumMap<>(SwarmTaskType.class);
-            int sameTargetPeerCount = 0;
+            List<PathfinderMob> sameTargetPeers = new ArrayList<>();
             for (PathfinderMob peer : tacticalNeighbors) {
                 SwarmAgentState peerState =
                         peer.getData(SwarmAttachments.AGENT_STATE.get());
@@ -425,38 +471,106 @@ public final class SwarmMobEvents {
                         || !state.targetId().equals(peerState.targetId())) {
                     continue;
                 }
-                sameTargetPeerCount++;
-                peerTaskOccupancy.merge(peerState.currentTask(), 1, Integer::sum);
+                sameTargetPeers.add(peer);
+                peerTaskOccupancy.merge(peerState.taskAtStartOfTick(gameTick), 1, Integer::sum);
+                squadConfidence = Math.max(
+                        squadConfidence,
+                        peerState.targetConfidence(
+                                gameTick, SwarmConfig.TARGET_MEMORY_TICKS.get()));
+                if (zombieColonyEngineeringEnabled) {
+                    squadHasEngineeringMaterial |= peerState.carriedEngineeringBlockCount() > 0;
+                    squadRouteBlocked |= SwarmEngineeringEscalationPolicy.shouldEscalate(
+                            peerState.plannerContext(),
+                            peerState.plannerBlockedCount(),
+                            peerState.plannerUnreachableCount(),
+                            peerState.plannerFeasibleCount());
+                }
             }
-            int localGroupSize = sameTargetPeerCount + 1;
+            int localGroupSize = sameTargetPeers.size() + 1;
+            boolean squadSearchMode = !squadCombat
+                    && squadConfidence < SwarmConfig.SEARCH_CONFIDENCE_THRESHOLD.get();
 
-            var assignment = SwarmDivisionOfLaborPolicy.choose(
-                    mob.getUUID(),
-                    profile.archetype(),
-                    state.currentTask(),
-                    task -> {
-                        double demand = SwarmTaskDemandPolicy.demand(task, demandSignals);
-                        if (activeStrategy != null && activeStrategy.active()) {
-                            demand = SwarmAiTaskDemandPolicy.apply(
-                                    demand,
-                                    activeStrategy.decision().mode(),
-                                    task
-                            );
-                        }
-                        return SwarmTaskSaturationPolicy.adjustedDemand(
+            SwarmTaskDemandPolicy.Signals demandSignals = new SwarmTaskDemandPolicy.Signals(
+                    localTaskAuctionEnabled ? squadSearchMode : searchMode,
+                    localTaskAuctionEnabled ? squadRouteBlocked : routeBlocked,
+                    localTaskAuctionEnabled
+                            ? squadHasEngineeringMaterial
+                            : zombieColonyEngineeringEnabled
+                                    && state.carriedEngineeringBlockCount() > 0,
+                    composition.dedicatedFlankCoverage(),
+                    composition.hasBreacher(),
+                    composition.rangedSupportCount() > 0,
+                    localTaskAuctionEnabled ? squadConfidence : confidence
+            );
+
+            java.util.function.ToDoubleFunction<SwarmTaskType> baseDemandProvider = task -> {
+                double demand = SwarmTaskDemandPolicy.demand(task, demandSignals);
+                if (activeStrategy != null && activeStrategy.active()) {
+                    demand = SwarmAiTaskDemandPolicy.apply(
+                            demand,
+                            activeStrategy.decision().mode(),
+                            task
+                    );
+                }
+                return demand;
+            };
+
+            SwarmDivisionOfLaborPolicy.Assignment assignment;
+            if (localTaskAuctionEnabled) {
+                List<SwarmLocalTaskAuctionPolicy.Member> auctionMembers =
+                        new ArrayList<>(localGroupSize);
+                auctionMembers.add(taskAuctionMember(mob, state, observation, gameTick));
+                for (PathfinderMob peer : sameTargetPeers) {
+                    SwarmAgentState peerState =
+                            peer.getData(SwarmAttachments.AGENT_STATE.get());
+                    auctionMembers.add(taskAuctionMember(
+                            peer,
+                            peerState,
+                            observation,
+                            gameTick
+                    ));
+                }
+
+                SwarmLocalTaskAuctionPolicy.Result auction =
+                        SwarmLocalTaskAuctionPolicy.allocate(
+                                auctionMembers,
+                                baseDemandProvider
+                        );
+                SwarmLocalTaskAuctionPolicy.Assignment selected =
+                        auction.assignment(mob.getUUID());
+                assignment = selected == null
+                        ? new SwarmDivisionOfLaborPolicy.Assignment(
+                                SwarmTaskType.RESERVE, 0.0, 0.0, 0.0)
+                        : new SwarmDivisionOfLaborPolicy.Assignment(
+                                selected.task(),
+                                selected.utility(),
+                                selected.demand(),
+                                selected.responseThreshold()
+                        );
+                state.recordLocalTaskAuction(assignment.task() != SwarmTaskType.RESERVE);
+            } else {
+                SwarmLocalTaskAuctionPolicy.Member self =
+                        taskAuctionMember(mob, state, observation, gameTick);
+                boolean combatBusy = self.combatBusy();
+                assignment = SwarmDivisionOfLaborPolicy.choose(
+                        mob.getUUID(),
+                        profile.archetype(),
+                        state.currentTask(),
+                        task -> SwarmTaskSaturationPolicy.adjustedDemand(
                                 profile.archetype(),
                                 task,
-                                demand,
+                                baseDemandProvider.applyAsDouble(task),
                                 localGroupSize,
                                 peerTaskOccupancy.getOrDefault(task, 0),
                                 state.currentTask()
-                        );
-                    },
-                    state::taskExperience,
-                    0.0,
-                    combatBusy
-            );
+                        ),
+                        state::taskExperience,
+                        self.normalizedDistance(),
+                        combatBusy
+                );
+            }
 
+            SwarmTaskType previousTask = state.currentTask();
             SwarmSpecialization specializationCandidate =
                     SwarmSpecialization.forAssignment(
                             profile.archetype(),
@@ -470,11 +584,15 @@ public final class SwarmMobEvents {
                     gameTick,
                     SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.get()
             );
+            if (previousTask != state.currentTask()) {
+                SwarmActionVisuals.taskChanged(level, mob, state.currentTask());
+            }
 
             state.updateTaskExperience(
                     state.currentTask(),
                     SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get(),
-                    SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get()
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get(),
+                    gameTick
             );
 
             candidateRole = SwarmSpecializationRolePolicy.role(
@@ -482,7 +600,17 @@ public final class SwarmMobEvents {
                     candidateRole
             );
         } else {
-            state.resetActiveSpecialization();
+            SwarmTaskType previousTask = state.currentTask();
+            state.resetActiveSpecialization(gameTick);
+            if (previousTask != state.currentTask()) {
+                SwarmActionVisuals.taskChanged(level, mob, state.currentTask());
+            }
+            state.updateTaskExperience(
+                    null,
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get(),
+                    SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get(),
+                    gameTick
+            );
         }
 
         // Actual observed Spider coverage determines which flank is vacant.
@@ -515,9 +643,32 @@ public final class SwarmMobEvents {
                             .toList(),
                     SwarmConfig.DIVISION_OF_LABOR_ENABLED.get());
         }
+        boolean frontlineRotated = false;
+        if (mob instanceof Zombie && !searchMode && squadCombat && confidence >= 0.65
+                && SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()) {
+            List<SwarmFrontlineRotationPolicy.Member> rotationRoster = new ArrayList<>();
+            rotationRoster.add(new SwarmFrontlineRotationPolicy.Member(
+                    mob.getUUID(), profile.archetype(), state.role(),
+                    state.currentTask(), healthFraction(mob)));
+            for (PathfinderMob peer : tacticalNeighbors) {
+                SwarmAgentState peerState = peer.getData(SwarmAttachments.AGENT_STATE.get());
+                rotationRoster.add(new SwarmFrontlineRotationPolicy.Member(
+                        peer.getUUID(), SwarmAgentProfiles.profile(peer).archetype(),
+                        peerState.role(), peerState.currentTask(), healthFraction(peer)));
+            }
+            SwarmFrontlineRotationPolicy.Decision rotation =
+                    SwarmFrontlineRotationPolicy.choose(
+                            mob.getUUID(), proposedRole, rotationRoster, true);
+            if (rotation.rotated()) {
+                proposedRole = rotation.role();
+                frontlineRotated = true;
+            }
+        }
         boolean urgentVacancy = coverage.fillingMissingFlank()
                 || coverage.frontAnchor()
+                || frontlineRotated
                 || (mob instanceof Spider && proposedRole != state.role());
+        SwarmRole previousTacticalRole = state.role();
         SwarmRole tacticalRole = state.stabilizeRole(
                 proposedRole,
                 gameTick,
@@ -525,6 +676,11 @@ public final class SwarmMobEvents {
                         ? Math.min(8, SwarmConfig.ROLE_HYSTERESIS_TICKS.get())
                         : SwarmConfig.ROLE_HYSTERESIS_TICKS.get()
         );
+        if (frontlineRotated) {
+            SwarmActionVisuals.reliefRotation(level, mob);
+        } else if (previousTacticalRole != tacticalRole) {
+            SwarmActionVisuals.roleChanged(level, mob, tacticalRole);
+        }
         state.updateVacantFlankCoverage(
                 coverage.fillingMissingFlank() && tacticalRole == coverage.role());
 
@@ -622,7 +778,11 @@ public final class SwarmMobEvents {
                             .toList(),
                     SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()
             );
+            boolean wasRegrouping = state.searchRallyActive();
             state.updateSearchRally(rally.regrouping());
+            if (rally.regrouping() && !wasRegrouping) {
+                SwarmActionVisuals.regroup(level, mob);
+            }
 
             state.updateLocalPlan(
                     movementNeighbors.size(),
@@ -703,6 +863,11 @@ public final class SwarmMobEvents {
                             .toList(),
                     SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()
             );
+            var stabilizedFrame = SwarmTacticalHysteresisPolicy.update(
+                    state.tacticalHysteresisState(), tacticalFrame, gameTick,
+                    SwarmConfig.TACTICAL_PATTERN_HYSTERESIS_TICKS.get());
+            state.setTacticalHysteresisState(stabilizedFrame.state());
+            tacticalFrame = stabilizedFrame.frame() == null ? tacticalFrame : stabilizedFrame.frame();
             String speciesTactic = switch (profile.archetype()) {
                 case ASSAULT -> zombieTactics.mode().name();
                 case RANGED_SUPPORT -> skeletonTactics.mode().name();
@@ -1161,6 +1326,48 @@ public final class SwarmMobEvents {
         return hit.getType() == HitResult.Type.MISS;
     }
 
+    private static SwarmLocalTaskAuctionPolicy.Member taskAuctionMember(
+            PathfinderMob mob,
+            SwarmAgentState state,
+            TargetObservation observation,
+            long currentGameTick
+    ) {
+        EnumMap<SwarmTaskType, Double> experience =
+                new EnumMap<>(SwarmTaskType.class);
+        for (SwarmTaskType task : SwarmTaskType.values()) {
+            experience.put(task, state.taskExperienceAtStartOfTick(task, currentGameTick));
+        }
+
+        double dx = mob.getX() - observation.x();
+        double dy = mob.getY() - observation.y();
+        double dz = mob.getZ() - observation.z();
+        double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double normalizedDistance = Double.isFinite(distance)
+                ? Math.max(0.0, Math.min(4.0,
+                        distance / Math.max(8.0, SwarmConfig.NEIGHBOR_RADIUS.get())))
+                : 4.0;
+
+        var target = mob.getTarget();
+        boolean combatBusy = SwarmCombatBusyPolicy.isBusy(
+                target != null,
+                target != null && mob.hasLineOfSight(target),
+                target == null ? Double.POSITIVE_INFINITY : mob.distanceToSqr(target),
+                SwarmConfig.RELEASE_TO_VANILLA_DISTANCE.get()
+        );
+
+        return new SwarmLocalTaskAuctionPolicy.Member(
+                mob.getUUID(),
+                SwarmAgentProfiles.profile(mob).archetype(),
+                state.taskAtStartOfTick(currentGameTick),
+                experience,
+                normalizedDistance,
+                combatBusy,
+                state.taskSwitchLockedAtStartOfTick(
+                        currentGameTick,
+                        SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.get())
+        );
+    }
+
     /**
      * One entity query feeds two independently capped channels. In particular a
      * wide communication radius must not crowd out the nearest movement peers.
@@ -1259,8 +1466,13 @@ public final class SwarmMobEvents {
         int memoryTicks = SwarmConfig.TARGET_MEMORY_TICKS.get();
         List<TargetObservation> records = new ArrayList<>();
 
-        for (var message : state.drainDeliverableTargetMessages(gameTick)) {
+        var deliverableMessages = state.drainDeliverableTargetMessages(gameTick);
+        for (var message : deliverableMessages) {
             records.add(message.observation());
+        }
+        if (!deliverableMessages.isEmpty()) {
+            SwarmActionVisuals.communicationAcknowledged(
+                    level, self, deliverableMessages.size());
         }
 
         Player direct = findDirectObservation(
@@ -1306,6 +1518,15 @@ public final class SwarmMobEvents {
                         velocity.z
                 );
                 state.recordSensingAccepted(sensingSample.horizontalNoiseMagnitude());
+                List<TargetObservation> fusionRecords = new ArrayList<>(records);
+                if (state.targetObservation() != null) {
+                    fusionRecords.add(state.targetObservation());
+                }
+                fusionRecords.add(observation);
+                var fusion = fuseObservations(gameTick, memoryTicks, fusionRecords, observation);
+                observation = fusion.observation();
+                state.recordCollectiveObservationFusion(
+                        fusion.contributors(), fusion.maximumHorizontalDisagreement());
                 state.rememberTarget(observation, true);
                 return new TargetSelection(observation, direct, true);
             }
@@ -1346,16 +1567,47 @@ public final class SwarmMobEvents {
             records.add(state.targetObservation());
         }
 
-        var selected = TargetRelayPolicy.selectFreshest(gameTick, memoryTicks, records);
-        if (selected.isPresent()) {
-            TargetObservation observation = selected.get();
+        var fusion = fuseObservations(gameTick, memoryTicks, records, null);
+        if (fusion != null) {
+            TargetObservation observation = fusion.observation();
             Player shared = resolvePlayer(level, observation.targetId());
             if (shared != null && observation.hasFinitePosition()) {
+                state.recordCollectiveObservationFusion(
+                        fusion.contributors(), fusion.maximumHorizontalDisagreement());
                 state.rememberTarget(observation, false);
                 return new TargetSelection(observation, shared, false);
             }
         }
 
+        return null;
+    }
+
+    private static TargetRelayPolicy.FusionResult fuseObservations(
+            long gameTick,
+            int memoryTicks,
+            List<TargetObservation> records,
+            TargetObservation fallback
+    ) {
+        if (SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.get()) {
+            var fused = TargetRelayPolicy.fuseFreshest(
+                    gameTick,
+                    memoryTicks,
+                    records,
+                    SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS.get(),
+                    8.0
+            );
+            if (fused.isPresent()) return fused.get();
+        }
+
+        if (fallback != null) {
+            return new TargetRelayPolicy.FusionResult(fallback, 1, 0.0);
+        }
+        if (!SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.get()) {
+            var selected = TargetRelayPolicy.selectFreshest(gameTick, memoryTicks, records);
+            if (selected.isPresent() && selected.get().hasFinitePosition()) {
+                return new TargetRelayPolicy.FusionResult(selected.get(), 1, 0.0);
+            }
+        }
         return null;
     }
 
@@ -1389,6 +1641,12 @@ public final class SwarmMobEvents {
             return player;
         }
         return null;
+    }
+
+    private static double healthFraction(PathfinderMob mob) {
+        double maximum = mob.getMaxHealth();
+        if (!Double.isFinite(maximum) || maximum <= 0.0) return 1.0;
+        return Math.max(0.0, Math.min(1.0, mob.getHealth() / maximum));
     }
 
     private static boolean validTarget(Player player) {

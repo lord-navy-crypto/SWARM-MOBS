@@ -16,6 +16,8 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 repositories {
     mavenCentral()
     maven { url = "https://maven.architectury.dev/" }
+    maven { url = "https://repo.spongepowered.org/repository/maven-public/" }
+    maven { url = "https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/" }
 }
 
 neoForge {
@@ -54,7 +56,9 @@ neoForge {
 }
 
 dependencies {
+    compileOnly 'org.spongepowered:mixin:0.8.7'
     implementation "me.shedaniel.cloth:cloth-config-neoforge:${cloth_config_version}"
+    implementation "software.bernie.geckolib:geckolib-neoforge-1.21.1:${geckolib_version}"
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testImplementation 'com.google.code.gson:gson:2.11.0'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
@@ -145,6 +149,7 @@ var generateModMetadata = tasks.register("generateModMetadata", ProcessResources
             mod_name                : mod_name,
             mod_license             : mod_license,
             mod_version             : mod_version,
+            geckolib_version        : geckolib_version,
     ]
     inputs.properties replaceProperties
     expand replaceProperties

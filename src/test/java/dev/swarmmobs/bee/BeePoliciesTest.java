@@ -20,11 +20,78 @@ class BeePoliciesTest {
     @Test
     void taskAllocationRespondsToThreatAndUsesSwitchHysteresis() {
         var worker = new BeeTaskPolicy.Worker(1, 1, 1, 1);
-        var needs = new BeeTaskPolicy.Needs(0.4, 0.2, 0.95, 0.1, 0);
+        var needs = new BeeTaskPolicy.Needs(0.4, 0.2, 0.6, 0.1, 0);
         assertEquals(BeeTaskPolicy.Task.GUARD,
                 BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.FORAGE, 0.1));
         assertEquals(BeeTaskPolicy.Task.FORAGE,
-                BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.FORAGE, 0.6));
+                BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.FORAGE, 0.9));
+    }
+
+    @Test
+    void severeObservedThreatCanOverrideHighNectarShortage() {
+        var worker = new BeeTaskPolicy.Worker(1.0, 0.5, 0.0, 0.5);
+        var needs = new BeeTaskPolicy.Needs(1.0, 0.0, 1.0, 0.0, 0.0);
+        assertEquals(BeeTaskPolicy.Task.GUARD,
+                BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.FORAGE, 0.14));
+    }
+
+    @Test
+    void repeatedForagingFatigueCanSelectRestOverAnotherTrip() {
+        var worker = new BeeTaskPolicy.Worker(1, 0.5, 0.5, 0.5);
+        var needs = new BeeTaskPolicy.Needs(1.0, 0.0, 0.0, 0.0, 1.0);
+        assertEquals(BeeTaskPolicy.Task.REST,
+                BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.FORAGE, 0.14));
+    }
+
+    @Test
+    void lowFatigueDoesNotSuppressNeededForaging() {
+        var worker = new BeeTaskPolicy.Worker(1, 0.5, 0.5, 0.5);
+        var needs = new BeeTaskPolicy.Needs(1.0, 0.0, 0.0, 0.0, 0.1);
+        assertEquals(BeeTaskPolicy.Task.FORAGE,
+                BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.FORAGE, 0.14));
+    }
+
+    @Test
+    void saturatedGuardDemandRecruitsForagersInsteadOfOverstaffingGuards() {
+        var worker = new BeeTaskPolicy.Worker(1.0, 1.0, 1.0, 1.0);
+        var needs = new BeeTaskPolicy.Needs(1.0, 0.0, 1.0, 0.0, 0.0);
+        var belowGuardTarget = new BeeTaskPolicy.Workforce(8, 4, 0, 1, 0, 0);
+        var atGuardTarget = new BeeTaskPolicy.Workforce(8, 4, 0, 2, 0, 0);
+
+        assertEquals(BeeTaskPolicy.Task.GUARD,
+                BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.FORAGE,
+                        0.14, belowGuardTarget));
+        assertEquals(BeeTaskPolicy.Task.FORAGE,
+                BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.FORAGE,
+                        0.14, atGuardTarget));
+    }
+
+    @Test
+    void saturatedIncumbentCanStayButExcessStaffingEventuallyReleasesIt() {
+        var worker = new BeeTaskPolicy.Worker(1.0, 1.0, 1.0, 1.0);
+        var needs = new BeeTaskPolicy.Needs(1.0, 0.0, 1.0, 0.0, 0.0);
+        var atTarget = new BeeTaskPolicy.Workforce(8, 4, 0, 2, 0, 0);
+        var overstaffed = new BeeTaskPolicy.Workforce(8, 4, 0, 4, 0, 0);
+
+        assertEquals(BeeTaskPolicy.Task.GUARD,
+                BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.GUARD,
+                        0.14, atTarget));
+        assertEquals(BeeTaskPolicy.Task.FORAGE,
+                BeeTaskPolicy.select(needs, worker, BeeTaskPolicy.Task.GUARD,
+                        0.14, overstaffed));
+    }
+
+    @Test
+    void activeTaskHeadcountsScaleWithObservedNeedAndPopulation() {
+        var needs = new BeeTaskPolicy.Needs(1.0, 0.5, 1.0, 0.0, 0.0);
+        assertEquals(8, BeeTaskPolicy.desiredHeadcount(
+                BeeTaskPolicy.Task.FORAGE, needs, 10));
+        assertEquals(2, BeeTaskPolicy.desiredHeadcount(
+                BeeTaskPolicy.Task.NURSE, needs, 10));
+        assertEquals(3, BeeTaskPolicy.desiredHeadcount(
+                BeeTaskPolicy.Task.GUARD, needs, 10));
+        assertEquals(0, BeeTaskPolicy.desiredHeadcount(
+                BeeTaskPolicy.Task.BUILD, needs, 10));
     }
 
     @Test

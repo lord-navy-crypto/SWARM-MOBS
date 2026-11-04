@@ -9,12 +9,20 @@ import dev.swarmmobs.agent.SwarmAgentState;
 import dev.swarmmobs.agent.SwarmSpecialization;
 import dev.swarmmobs.agent.SwarmTaskType;
 import dev.swarmmobs.ai.SwarmAiActiveState;
+import dev.swarmmobs.ai.SwarmPlayerStyleRegistry;
+import dev.swarmmobs.ai.SwarmPlayerMotionRegistry;
 import dev.swarmmobs.data.SwarmAttachments;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.animal.Bee;
 import java.util.EnumMap;
 import dev.swarmmobs.ai.SwarmAiShadowService;
 import dev.swarmmobs.ai.SwarmAiShadowState;
+import dev.swarmmobs.ai.SwarmAiLearningMemory;
+import dev.swarmmobs.ai.SwarmAiLearningService;
+import dev.swarmmobs.ai.ollama.OllamaStrategyProvider;
+import dev.swarmmobs.ai.ollama.OllamaModelAdvisor;
 import dev.swarmmobs.config.SwarmConfig;
 import dev.swarmmobs.colony.SwarmNestScienceTelemetry;
 import dev.swarmmobs.experiment.SwarmExperimentManager;
@@ -76,9 +84,14 @@ public final class SwarmControlNetwork {
 
         // Absolute setters make Save idempotent even after reopening or packet retries.
         if (payload.action().startsWith("set:")) {
-            if (!applyAbsoluteAction(payload.action().substring(4), payload.value())) {
+            String absoluteAction = payload.action().substring(4);
+            if (!applyAbsoluteAction(absoluteAction, payload.value())) {
                 sendSnapshot(player);
                 return;
+            }
+            if ("player_learning_toggle".equals(absoluteAction) && payload.value() < 0.5) {
+                SwarmPlayerStyleRegistry.clearAll();
+                SwarmPlayerMotionRegistry.clearAll();
             }
             SwarmExperimentManager.markCustom();
         } else {
@@ -100,7 +113,20 @@ public final class SwarmControlNetwork {
     private static boolean applyAbsoluteAction(String action, double value) {
         if (!Double.isFinite(value)) return false;
         switch (action) {
+            case "bee_reproduction_enabled" -> { SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.set(value >= 0.5); return true; }
+            case "bee_honey_enabled" -> { SwarmConfig.BEE_HONEY_BONUS_ENABLED.set(value >= 0.5); return true; }
+            case "bee_hive_capacity" -> { SwarmConfig.BEE_HIVE_CAPACITY.set((int) Math.round(Math.max(3, Math.min(16, value)))); return true; }
+            case "bee_colony_population" -> { SwarmConfig.BEE_COLONY_MAX_POPULATION.set((int) Math.round(Math.max(3, Math.min(128, value)))); return true; }
+            case "bee_reproduction_interval" -> { SwarmConfig.BEE_REPRODUCTION_INTERVAL_TICKS.set((int) Math.round(Math.max(600, Math.min(24000, value)))); return true; }
+            case "bee_age_speed" -> { SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.set((int) Math.round(Math.max(1, Math.min(8, value)))); return true; }
+            case "bee_honey_multiplier" -> { SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.set((int) Math.round(Math.max(1, Math.min(5, value)))); return true; }
             case "toggle_master" -> { SwarmConfig.ENABLED.set(value >= 0.5); return true; }
+            case "player_learning_toggle" -> { SwarmConfig.PLAYER_LEARNING_ENABLED.set(value >= 0.5); return true; }
+            case "tactical_pattern_hysteresis_ticks" -> {
+                SwarmConfig.TACTICAL_PATTERN_HYSTERESIS_TICKS.set(
+                        (int) Math.round(Math.max(0, Math.min(100, value))));
+                return true;
+            }
             case "ai_toggle" -> { SwarmConfig.EXTERNAL_AI_ENABLED.set(value >= 0.5); if (value < 0.5) SwarmAiActiveState.clear(); return true; }
             case "ai_active_toggle" -> { SwarmConfig.EXTERNAL_AI_ACTIVE_ENABLED.set(value >= 0.5); if (value < 0.5) SwarmAiActiveState.clear(); return true; }
             case "toggle_engineering" -> { SwarmConfig.ZOMBIE_ENGINEERING_ENABLED.set(value >= 0.5); return true; }
@@ -134,6 +160,7 @@ public final class SwarmControlNetwork {
             case "nest_interval_delta" -> { SwarmConfig.NEST_BUILD_INTERVAL_TICKS.set((int) Math.round(Math.max(100, Math.min(1200, value)))); return true; }
             case "nest_population_delta" -> { SwarmConfig.NEST_MIN_GROUP_SIZE.set((int) Math.round(Math.max(2, Math.min(16, value)))); return true; }
             case "toggle_division" -> { SwarmConfig.DIVISION_OF_LABOR_ENABLED.set(value >= 0.5); return true; }
+            case "local_task_auction_enabled" -> { SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.set(value >= 0.5); return true; }
             case "support_position_toggle" -> { SwarmConfig.SUPPORT_POSITION_OPTIMIZATION_ENABLED.set(value >= 0.5); return true; }
             case "formation_hysteresis_delta" -> { SwarmConfig.FORMATION_SLOT_HYSTERESIS_TICKS.set((int) Math.round(Math.max(0, Math.min(200, value)))); return true; }
             case "role_hysteresis_delta" -> { SwarmConfig.ROLE_HYSTERESIS_TICKS.set((int) Math.round(Math.max(0, Math.min(200, value)))); return true; }
@@ -178,7 +205,8 @@ public final class SwarmControlNetwork {
     private static void applyAction(String action, double value, ServerPlayer player) {
         if (!action.startsWith("preset_")
                 && !action.startsWith("ai_")
-                && !action.equals("experiment_seed_delta")) {
+                && !action.equals("experiment_seed_delta")
+                && !action.equals("experiment_record")) {
             SwarmExperimentManager.markCustom();
         }
 
@@ -188,6 +216,7 @@ public final class SwarmControlNetwork {
                 SwarmConfig.ENABLED.set(true);
                 SwarmConfig.COMMUNICATION_ENABLED.set(true);
                 SwarmConfig.DIVISION_OF_LABOR_ENABLED.set(true);
+                SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.set(true);
                 SwarmConfig.TARGET_PREDICTION_ENABLED.set(true);
                 SwarmConfig.SUPPORT_POSITION_OPTIMIZATION_ENABLED.set(true);
                 SwarmConfig.NAV_OBSTACLE_AVOIDANCE_ENABLED.set(true);
@@ -225,6 +254,21 @@ public final class SwarmControlNetwork {
             case "support_position_toggle" -> SwarmConfig.SUPPORT_POSITION_OPTIMIZATION_ENABLED.set(
                     !SwarmConfig.SUPPORT_POSITION_OPTIMIZATION_ENABLED.get());
 
+            case "player_learning_toggle" -> {
+                boolean next = !SwarmConfig.PLAYER_LEARNING_ENABLED.get();
+                SwarmConfig.PLAYER_LEARNING_ENABLED.set(next);
+                if (!next) {
+                    SwarmPlayerStyleRegistry.clearAll();
+                    SwarmPlayerMotionRegistry.clearAll();
+                }
+            }
+            case "player_learning_reset" -> {
+                SwarmPlayerStyleRegistry.clear(player.serverLevel());
+                SwarmPlayerMotionRegistry.clear(player.serverLevel());
+            }
+            case "tactical_pattern_hysteresis_delta" -> SwarmConfig.TACTICAL_PATTERN_HYSTERESIS_TICKS.set(
+                    (int) clamp(SwarmConfig.TACTICAL_PATTERN_HYSTERESIS_TICKS.get() + value, 0, 100));
+
             case "ai_toggle" -> {
                 boolean next = !SwarmConfig.EXTERNAL_AI_ENABLED.get();
                 SwarmConfig.EXTERNAL_AI_ENABLED.set(next);
@@ -242,6 +286,90 @@ public final class SwarmControlNetwork {
                     );
             case "ai_refresh" -> {
                 // Snapshot is returned by the normal server-authoritative refresh below.
+            }
+            case "ai_discover" -> {
+                player.sendSystemMessage(Component.literal(
+                        "Discovering local Ollama models; no model will be downloaded or selected automatically."
+                ));
+                OllamaStrategyProvider.INSTANCE.discover().whenComplete((discovery, error) ->
+                        player.getServer().execute(() -> {
+                            if (!player.isAlive()) {
+                                return;
+                            }
+                            if (error != null) {
+                                player.sendSystemMessage(Component.literal(
+                                        "Ollama discovery failed: " + error.getMessage()
+                                                + ". Deterministic swarm behavior remains available."
+                                ));
+                            } else {
+                                for (String line : OllamaModelAdvisor.diagnosticLines(
+                                        discovery,
+                                        SwarmConfig.OLLAMA_BASE_URL.get(),
+                                        SwarmConfig.OLLAMA_MODEL.get()
+                                )) {
+                                    player.sendSystemMessage(Component.literal(line));
+                                }
+                            }
+                            sendSnapshot(player);
+                        })
+                );
+            }
+            case "experiment_record" -> {
+                try {
+                    var metrics = SwarmExperimentMetrics.snapshot(player.serverLevel());
+                    var record = SwarmAiLearningMemory.get(player.serverLevel()).record(
+                            metrics,
+                            SwarmExperimentManager.activePreset().name(),
+                            SwarmExperimentManager.experimentSeed(),
+                            player.serverLevel().getGameTime()
+                    );
+                    player.sendSystemMessage(Component.literal(
+                            "Saved experiment #" + record.id() + " (" + record.preset()
+                                    + ", " + record.elapsedTicks() + " ticks)."
+                    ));
+                } catch (IllegalStateException exception) {
+                    player.sendSystemMessage(Component.literal(
+                            "Experiment snapshot not saved: " + exception.getMessage()
+                    ));
+                }
+            }
+            case "ai_evaluate" -> {
+                player.sendSystemMessage(Component.literal(
+                        "Ollama experiment evaluation started; gameplay remains deterministic."
+                ));
+                SwarmAiLearningService.evaluate(player.serverLevel()).whenComplete((evaluation, error) ->
+                        player.serverLevel().getServer().execute(() -> {
+                            if (player.isAlive()) {
+                                if (error != null) {
+                                    player.sendSystemMessage(Component.literal(
+                                            "Experiment evaluation failed: " + error.getMessage()
+                                    ));
+                                } else {
+                                    player.sendSystemMessage(Component.literal(
+                                            "Evaluation (" + evaluation.confidence() + "): "
+                                                    + evaluation.summary()
+                                    ));
+                                }
+                                sendSnapshot(player);
+                            }
+                        })
+                );
+            }
+            case "ai_transfer" -> {
+                var insights = SwarmAiLearningMemory.get(player.serverLevel()).experienceTransfer();
+                if (insights.isEmpty()) {
+                    player.sendSystemMessage(Component.literal(
+                            "No matched transfer evidence yet. Repeat a supported preset pair with "
+                                    + "the same seed and similar population/duration."
+                    ));
+                } else {
+                    player.sendSystemMessage(Component.literal(
+                            "Cross-experiment transfer evidence (associations, not causal proof):"
+                    ));
+                    for (var insight : insights) {
+                        player.sendSystemMessage(Component.literal(insight.displayLine()));
+                    }
+                }
             }
 
             case "preset_baseline" -> SwarmExperimentManager.apply(SwarmExperimentPreset.BASELINE);
@@ -279,6 +407,8 @@ public final class SwarmControlNetwork {
 
             case "toggle_division" ->
                     SwarmConfig.DIVISION_OF_LABOR_ENABLED.set(!SwarmConfig.DIVISION_OF_LABOR_ENABLED.get());
+            case "toggle_local_task_auction" ->
+                    SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.set(!SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.get());
             case "specialization_hold_delta" -> SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.set((int) clamp(
                     SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.get() + value,
                     0.0,
@@ -296,6 +426,7 @@ public final class SwarmControlNetwork {
             ));
             case "labor_baseline" -> {
                 SwarmConfig.DIVISION_OF_LABOR_ENABLED.set(true);
+                SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.set(true);
                 SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.set(30);
                 SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.set(0.025);
                 SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.set(0.995);
@@ -484,11 +615,17 @@ public final class SwarmControlNetwork {
                     1.0,
                     96.0
             ));
+            case "toggle_observation_fusion" -> SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.set(
+                    !SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.get());
+            case "fusion_window_delta" -> SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS.set(
+                    (int) clamp(SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS.get() + value, 0.0, 20.0));
             case "comm_baseline" -> {
                 SwarmConfig.COMMUNICATION_ENABLED.set(true);
                 SwarmConfig.COMMUNICATION_LATENCY_TICKS.set(0);
                 SwarmConfig.COMMUNICATION_PACKET_DROP_RATE.set(0.0);
                 SwarmConfig.COMMUNICATION_RADIUS.set(16.0);
+                SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.set(true);
+                SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS.set(4);
             }
 
             case "search_threshold_delta" -> SwarmConfig.SEARCH_CONFIDENCE_THRESHOLD.set(clamp(
@@ -653,6 +790,7 @@ public final class SwarmControlNetwork {
                 SwarmConfig.FORMATION_SLOT_HYSTERESIS_TICKS.set(20);
                 SwarmConfig.ROLE_HYSTERESIS_TICKS.set(12);
                 SwarmConfig.DIVISION_OF_LABOR_ENABLED.set(true);
+                SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.set(true);
                 SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.set(30);
                 SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.set(0.025);
                 SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.set(0.995);
@@ -705,6 +843,39 @@ public final class SwarmControlNetwork {
                 SwarmAiActiveState.clear();
             }
 
+            case "bee_reproduction_toggle" ->
+                    SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.set(!SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.get());
+            case "bee_honey_toggle" ->
+                    SwarmConfig.BEE_HONEY_BONUS_ENABLED.set(!SwarmConfig.BEE_HONEY_BONUS_ENABLED.get());
+            case "bee_growth_toggle" ->
+                    SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.set(!SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.get());
+            case "bee_flower_toggle" ->
+                    SwarmConfig.BEE_FLOWER_RECRUITMENT_ENABLED.set(!SwarmConfig.BEE_FLOWER_RECRUITMENT_ENABLED.get());
+            case "bee_shelter_toggle" ->
+                    SwarmConfig.BEE_COLONY_SHELTER_ENABLED.set(!SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get());
+            case "bee_capacity_delta" -> SwarmConfig.BEE_HIVE_CAPACITY.set((int) clamp(
+                    SwarmConfig.BEE_HIVE_CAPACITY.get() + value, 3, 16));
+            case "bee_population_delta" -> SwarmConfig.BEE_COLONY_MAX_POPULATION.set((int) clamp(
+                    SwarmConfig.BEE_COLONY_MAX_POPULATION.get() + value, 3, 128));
+            case "bee_reproduction_interval_delta" -> SwarmConfig.BEE_REPRODUCTION_INTERVAL_TICKS.set((int) clamp(
+                    SwarmConfig.BEE_REPRODUCTION_INTERVAL_TICKS.get() + value, 600, 24000));
+            case "bee_age_speed_delta" -> SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.set((int) clamp(
+                    SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.get() + value, 1, 8));
+            case "bee_honey_multiplier_delta" -> SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.set((int) clamp(
+                    SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.get() + value, 1, 5));
+            case "bee_baseline" -> {
+                SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.set(true);
+                SwarmConfig.BEE_HONEY_BONUS_ENABLED.set(true);
+                SwarmConfig.BEE_HIVE_CAPACITY.set(8);
+                SwarmConfig.BEE_COLONY_MAX_POPULATION.set(48);
+                SwarmConfig.BEE_REPRODUCTION_INTERVAL_TICKS.set(3600);
+                SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.set(2);
+                SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.set(2);
+                SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.set(true);
+                SwarmConfig.BEE_FLOWER_RECRUITMENT_ENABLED.set(true);
+                SwarmConfig.BEE_COLONY_SHELTER_ENABLED.set(true);
+            }
+
             default -> {
                 // Unknown actions are ignored deliberately.
             }
@@ -723,6 +894,11 @@ public final class SwarmControlNetwork {
         var ai = SwarmAiShadowState.snapshot();
         var decision = ai.lastDecision();
         var activeAi = SwarmAiActiveState.snapshot(level.getGameTime());
+        var learningMemory = SwarmAiLearningMemory.get(level);
+        var learningSummary = learningMemory.summary();
+        var lastEvaluation = learningMemory.lastEvaluation();
+        var playerLearning = SwarmPlayerStyleRegistry.summary(level, level.getGameTime());
+        var playerMotion = SwarmPlayerMotionRegistry.summary(level, level.getGameTime());
         boolean masterEnabled = SwarmConfig.ENABLED.get();
         boolean exposeDynamicAssignments =
                 SwarmControlEffectiveStatePolicy.exposeDynamicAssignments(
@@ -741,6 +917,7 @@ public final class SwarmControlNetwork {
         int skeletons = 0;
         int spiders = 0;
         int creepers = 0;
+        int liveBees = 0;
         int tacticalAgentsWithAllies = 0;
         int tacticalPeerLinks = 0;
         int agentsWithTacticalBreacher = 0;
@@ -774,11 +951,18 @@ public final class SwarmControlNetwork {
         long supportLaneSwitches = 0, supportFeasibleSamples = 0,
                 supportUnavailableSamples = 0;
         long nestsFoundedByLoadedAgents = 0L;
+        long collectiveObservationFusions = 0L;
+        long localTaskAuctionRounds = 0L;
+        long localTaskAuctionAssignments = 0L;
+        int agentsWithRecentFusion = 0;
+        long fusionContributorTotal = 0L;
+        double maximumFusionDisagreement = 0.0;
         EnumMap<SwarmTaskType, Integer> taskCounts = new EnumMap<>(SwarmTaskType.class);
         EnumMap<SwarmSpecialization, Integer> specializationCounts =
                 new EnumMap<>(SwarmSpecialization.class);
 
         for (var entity : level.getAllEntities()) {
+            if (entity instanceof Bee) liveBees++;
             if (!(entity instanceof PathfinderMob mob) || !SwarmAgentProfiles.isSupported(mob)) {
                 continue;
             }
@@ -801,6 +985,15 @@ public final class SwarmControlNetwork {
             if (masterEnabled) {
                 SwarmAgentState tacticalState =
                         mob.getData(SwarmAttachments.AGENT_STATE.get());
+                collectiveObservationFusions += tacticalState.collectiveObservationFusionCount();
+                localTaskAuctionRounds += tacticalState.localTaskAuctionRounds();
+                localTaskAuctionAssignments += tacticalState.localTaskAuctionAssignments();
+                if (tacticalState.lastFusionContributorCount() > 1) {
+                    agentsWithRecentFusion++;
+                    fusionContributorTotal += tacticalState.lastFusionContributorCount();
+                    maximumFusionDisagreement = Math.max(
+                            maximumFusionDisagreement, tacticalState.lastFusionDisagreement());
+                }
                 if (tacticalState.targetId() != null) {
                     if (tacticalState.coveringVacantFlank()) activeFlankFillers++;
                     if (tacticalState.rangedSpacingActive()) skeletonSpacing++;
@@ -888,7 +1081,43 @@ public final class SwarmControlNetwork {
                 pair("aiSearchRadiusMultiplier", decision.searchRadiusMultiplier()),
                 pair("aiRationale", decision.rationale()),
                 pair("aiLastError", ai.lastError()),
+                pair("playerLearningEnabled", SwarmConfig.PLAYER_LEARNING_ENABLED.get()),
+                pair("observationFusionEnabled", SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_ENABLED.get()),
+                pair("observationFusionWindowTicks", SwarmConfig.COLLECTIVE_OBSERVATION_FUSION_WINDOW_TICKS.get()),
+                pair("observationFusionCount", Math.min(Integer.MAX_VALUE, collectiveObservationFusions)),
+                pair("observationFusionAgents", agentsWithRecentFusion),
+                pair("observationFusionAvgContributors", agentsWithRecentFusion == 0
+                        ? 0.0 : fusionContributorTotal / (double) agentsWithRecentFusion),
+                pair("observationFusionMaxDisagreement", maximumFusionDisagreement),
+                pair("learningProfiles", playerLearning.profiles()),
+                pair("learningSamples", playerLearning.samples()),
+                pair("learningDominantStyle", playerLearning.dominantStyle().name()),
+                pair("learningMeleeShare", playerLearning.meleeShare()),
+                pair("learningProjectileShare", playerLearning.projectileShare()),
+                pair("learningExplosiveShare", playerLearning.explosiveShare()),
+                pair("learningFireShare", playerLearning.fireShare()),
+                pair("learningMagicShare", playerLearning.magicShare()),
+                pair("learningOtherShare", playerLearning.otherShare()),
+                pair("motionProfiles", playerMotion.profiles()),
+                pair("motionSamples", playerMotion.samples()),
+                pair("motionDominantStyle", playerMotion.dominantStyle().name()),
+                pair("motionStationaryShare", playerMotion.stationaryShare()),
+                pair("motionWalkingShare", playerMotion.walkingShare()),
+                pair("motionSprintingShare", playerMotion.sprintingShare()),
+                pair("motionErraticShare", playerMotion.erraticShare()),
+                pair("tacticalPatternHysteresisTicks", SwarmConfig.TACTICAL_PATTERN_HYSTERESIS_TICKS.get()),
                 pair("master", masterEnabled),
+                pair("liveBees", liveBees),
+                pair("beeReproductionEnabled", SwarmConfig.BEE_COLONY_REPRODUCTION_ENABLED.get()),
+                pair("beeHoneyBonusEnabled", SwarmConfig.BEE_HONEY_BONUS_ENABLED.get()),
+                pair("beeHiveCapacity", SwarmConfig.BEE_HIVE_CAPACITY.get()),
+                pair("beeColonyMaxPopulation", SwarmConfig.BEE_COLONY_MAX_POPULATION.get()),
+                pair("beeReproductionInterval", SwarmConfig.BEE_REPRODUCTION_INTERVAL_TICKS.get()),
+                pair("beeAgeSpeed", SwarmConfig.BEE_AGE_SPEED_MULTIPLIER.get()),
+                pair("beeHoneyMultiplier", SwarmConfig.BEE_HONEY_PRODUCTION_MULTIPLIER.get()),
+                pair("beeHiveGrowthEnabled", SwarmConfig.BEE_CONNECTED_HIVE_GROWTH_ENABLED.get()),
+                pair("beeFlowerRecruitmentEnabled", SwarmConfig.BEE_FLOWER_RECRUITMENT_ENABLED.get()),
+                pair("beeShelterEnabled", SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get()),
                 pair("liveAgents", zombies + skeletons + spiders + creepers),
                 pair("staleRouteResets", Math.min(Integer.MAX_VALUE, staleRouteResets)),
                 pair("laneBlockedFallbacks", Math.min(Integer.MAX_VALUE, laneBlockedFallbacks)),
@@ -1032,6 +1261,9 @@ public final class SwarmControlNetwork {
                 pair("specOverwatch", specializationCounts.getOrDefault(SwarmSpecialization.OVERWATCH, 0)),
                 pair("specLeadBreacher", specializationCounts.getOrDefault(SwarmSpecialization.LEAD_BREACHER, 0)),
                 pair("divisionEnabled", SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()),
+                pair("localTaskAuctionEnabled", SwarmConfig.LOCAL_TASK_AUCTION_ENABLED.get()),
+                pair("taskAuctionRounds", Math.min(Integer.MAX_VALUE, localTaskAuctionRounds)),
+                pair("taskAuctionAssignments", Math.min(Integer.MAX_VALUE, localTaskAuctionAssignments)),
                 pair("specializationHoldTicks", SwarmConfig.SPECIALIZATION_MIN_HOLD_TICKS.get()),
                 pair("specializationExperienceGain", SwarmConfig.SPECIALIZATION_EXPERIENCE_GAIN.get()),
                 pair("specializationExperienceDecay", SwarmConfig.SPECIALIZATION_EXPERIENCE_DECAY.get()),
@@ -1059,6 +1291,16 @@ public final class SwarmControlNetwork {
                                 activeAi.expiresTick() - level.getGameTime()
                         )
                         : 0),
+                pair("aiMemoryRuns", learningSummary.runCount()),
+                pair("aiMemoryPresets", learningSummary.presetCount()),
+                pair("aiLearningInFlight", SwarmAiLearningService.requestInFlight()),
+                pair("aiMemorySearchSuccess", learningSummary.searchSuccessRate()),
+                pair("aiMemoryRecoveryFailure", learningSummary.recoveryFailureRate()),
+                pair("aiMemoryCommDrop", learningSummary.communicationDropRate()),
+                pair("aiLastEvaluationConfidence", lastEvaluation == null
+                        ? "NONE" : lastEvaluation.evaluation().confidence().name()),
+                pair("aiLastEvaluation", lastEvaluation == null
+                        ? "No saved evaluation" : lastEvaluation.evaluation().summary()),
                 "activePreset=" + SwarmExperimentManager.activePreset().name(),
                 pair("experimentSeed", SwarmExperimentManager.experimentSeed()),
                 pair("experimentActive", metrics.active()),

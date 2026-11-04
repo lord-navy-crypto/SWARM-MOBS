@@ -4,8 +4,11 @@ import dev.swarmmobs.algorithm.SwarmCommunicationPolicy.TargetMessage;
 import dev.swarmmobs.algorithm.TargetObservation;
 import dev.swarmmobs.algorithm.SwarmEngagementPolicy;
 import dev.swarmmobs.algorithm.SwarmSupportPositionPolicy;
+import dev.swarmmobs.algorithm.SwarmAdaptiveTacticsPolicy;
+import dev.swarmmobs.algorithm.SwarmTacticalHysteresisPolicy;
 import dev.swarmmobs.algorithm.SwarmGameHandoffTimeoutPolicy;
 import dev.swarmmobs.algorithm.SwarmFailedWaypointMemory;
+import dev.swarmmobs.algorithm.SwarmTaskExperiencePolicy;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -47,6 +50,8 @@ public final class SwarmAgentState {
     private SwarmRole role = SwarmRole.CHASER;
     // Runtime-only encounter geometry, used for inspection and acceptance.
     private String tacticalPattern = "STANDARD";
+    private SwarmTacticalHysteresisPolicy.State tacticalHysteresisState =
+            SwarmTacticalHysteresisPolicy.State.empty();
     private boolean searchRallyActive;
     private long searchRallyEpisodes;
     // Updated by local same-target sightings, consulted by vanilla bow handoff.
@@ -126,6 +131,9 @@ public final class SwarmAgentState {
     private long sensingAcceptedObservations;
     private long sensingDroppedObservations;
     private double lastSensingNoiseMagnitude;
+    private long collectiveObservationFusionCount;
+    private int lastFusionContributorCount = 1;
+    private double lastFusionDisagreement;
     private boolean searchEpisodeActive;
     private UUID searchEpisodeTargetId;
     private long searchEpisodeStartTick = Long.MIN_VALUE;
@@ -153,6 +161,15 @@ public final class SwarmAgentState {
     private long specializationSwitchCount;
     private final EnumMap<SwarmTaskType, Double> taskExperience =
             new EnumMap<>(SwarmTaskType.class);
+    private long lastTaskExperienceUpdateTick = Long.MIN_VALUE;
+    private long taskExperienceSnapshotTick = Long.MIN_VALUE;
+    private final EnumMap<SwarmTaskType, Double> taskExperienceAtTickStart =
+            new EnumMap<>(SwarmTaskType.class);
+    private long lastTaskAssignmentTick = Long.MIN_VALUE;
+    private SwarmTaskType taskAtTickStart = SwarmTaskType.RESERVE;
+    private long specializationSinceTickAtTickStart = Long.MIN_VALUE;
+    private long localTaskAuctionRounds;
+    private long localTaskAuctionAssignments;
 
     private final List<TargetMessage> pendingTargetMessages = new ArrayList<>();
     private final LinkedHashMap<MessageSourceTargetKey, Long> latestDeliveredObservationBySource =
@@ -182,6 +199,7 @@ public final class SwarmAgentState {
         tacticalAssignmentTarget = selectedTarget;
         resetSupportPositionState();
         tacticalPattern = "STANDARD";
+        tacticalHysteresisState = SwarmTacticalHysteresisPolicy.State.empty();
         searchRallyActive = false;
         coveringVacantFlank = false;
         bowLaneClear = true;
@@ -350,6 +368,15 @@ public final class SwarmAgentState {
 
     public void setTacticalPattern(String pattern) {
         tacticalPattern = pattern == null ? "STANDARD" : pattern;
+    }
+
+    public SwarmTacticalHysteresisPolicy.State tacticalHysteresisState() {
+        return tacticalHysteresisState;
+    }
+
+    public void setTacticalHysteresisState(SwarmTacticalHysteresisPolicy.State state) {
+        tacticalHysteresisState = state == null
+                ? SwarmTacticalHysteresisPolicy.State.empty() : state;
     }
 
     /** Snapshot from the last local combat plan; not a raycast every tick. */
@@ -689,6 +716,25 @@ public final class SwarmAgentState {
         return currentTask;
     }
 
+    /**
+     * Stable same-tick view for decentralized auctions. If this agent already
+     * changed task during the current server tick, peers still see the task
+     * it held at the start of that tick.
+     */
+    public SwarmTaskType taskAtStartOfTick(long gameTick) {
+        return lastTaskAssignmentTick == gameTick ? taskAtTickStart : currentTask;
+    }
+
+    public boolean taskSwitchLockedAtStartOfTick(long gameTick, int minHoldTicks) {
+        long since = lastTaskAssignmentTick == gameTick
+                ? specializationSinceTickAtTickStart
+                : specializationSinceTick;
+        int hold = Math.max(0, minHoldTicks);
+        return since != Long.MIN_VALUE
+                && gameTick >= since
+                && gameTick - since < hold;
+    }
+
     public SwarmSpecialization specialization() {
         return specialization;
     }
@@ -708,6 +754,77 @@ public final class SwarmAgentState {
         return taskExperience.getOrDefault(task, 0.0);
     }
 
+    /** Immutable snapshot used by the compact per-entity persistent memory record. */
+    public Map<SwarmTaskType, Double> taskExperienceSnapshot() {
+        EnumMap<SwarmTaskType, Double> snapshot = new EnumMap<>(SwarmTaskType.class);
+        for (SwarmTaskType task : SwarmTaskType.values()) {
+            snapshot.put(task, taskExperience(task));
+        }
+        return Map.copyOf(snapshot);
+    }
+
+    /**
+     * Restore only bounded task experience. Runtime assignments, targets,
+     * navigation, communication queues and tactical hysteresis are rebuilt
+     * from fresh observations after the entity joins the level.
+     */
+    public void restoreTaskExperience(
+            Map<SwarmTaskType, Double> snapshot,
+            long currentGameTick
+    ) {
+        taskExperience.clear();
+        for (SwarmTaskType task : SwarmTaskType.values()) {
+            Double value = snapshot == null ? null : snapshot.get(task);
+            double bounded = value == null || !Double.isFinite(value)
+                    ? 0.0
+                    : Math.max(0.0, Math.min(1.0, value));
+            taskExperience.put(task, bounded);
+        }
+        taskExperienceAtTickStart.clear();
+        taskExperienceSnapshotTick = Long.MIN_VALUE;
+        lastTaskExperienceUpdateTick = Math.max(0L, currentGameTick);
+    }
+
+    /** Same-tick stable view used by all members of a local task auction. */
+    public double taskExperienceAtStartOfTick(SwarmTaskType task, long gameTick) {
+        if (task == null) return 0.0;
+        if (taskExperienceSnapshotTick == gameTick) {
+            return taskExperienceAtTickStart.getOrDefault(task, 0.0);
+        }
+        return taskExperience(task);
+    }
+
+    private void captureTaskAssignmentSnapshot(long gameTick) {
+        if (lastTaskAssignmentTick != gameTick) {
+            taskAtTickStart = currentTask;
+            specializationSinceTickAtTickStart = specializationSinceTick;
+            lastTaskAssignmentTick = gameTick;
+        }
+    }
+
+    private void captureTaskExperienceSnapshot(long gameTick) {
+        if (taskExperienceSnapshotTick != gameTick) {
+            taskExperienceAtTickStart.clear();
+            for (SwarmTaskType task : SwarmTaskType.values()) {
+                taskExperienceAtTickStart.put(task, taskExperience(task));
+            }
+            taskExperienceSnapshotTick = gameTick;
+        }
+    }
+
+    public long localTaskAuctionRounds() {
+        return localTaskAuctionRounds;
+    }
+
+    public long localTaskAuctionAssignments() {
+        return localTaskAuctionAssignments;
+    }
+
+    public void recordLocalTaskAuction(boolean specializedAssignment) {
+        localTaskAuctionRounds++;
+        if (specializedAssignment) localTaskAuctionAssignments++;
+    }
+
     public SwarmSpecialization stabilizeSpecialization(
             SwarmTaskType candidateTask,
             SwarmSpecialization candidateSpecialization,
@@ -723,6 +840,7 @@ public final class SwarmAgentState {
         int hold = Math.max(0, minHoldTicks);
 
         if (specializationSinceTick == Long.MIN_VALUE) {
+            captureTaskAssignmentSnapshot(gameTick);
             currentTask = nextTask;
             specialization = nextSpecialization;
             specializationSinceTick = gameTick;
@@ -737,6 +855,9 @@ public final class SwarmAgentState {
             return specialization;
         }
 
+        if (nextTask != currentTask || nextSpecialization != specialization) {
+            captureTaskAssignmentSnapshot(gameTick);
+        }
         currentTask = nextTask;
         specialization = nextSpecialization;
         specializationSinceTick = gameTick;
@@ -750,18 +871,39 @@ public final class SwarmAgentState {
         specializationSinceTick = Long.MIN_VALUE;
     }
 
+    public void resetActiveSpecialization(long gameTick) {
+        if (currentTask != SwarmTaskType.RESERVE) {
+            captureTaskAssignmentSnapshot(gameTick);
+        }
+        specializationSinceTickAtTickStart = Long.MIN_VALUE;
+        resetActiveSpecialization();
+    }
+
     public void updateTaskExperience(
             SwarmTaskType activeTask,
             double gain,
-            double decay
+            double decay,
+            long gameTick
     ) {
-        double retention = Math.max(0.0, Math.min(1.0, decay));
+        captureTaskExperienceSnapshot(gameTick);
+        if (lastTaskExperienceUpdateTick == Long.MIN_VALUE
+                || gameTick < lastTaskExperienceUpdateTick) {
+            lastTaskExperienceUpdateTick = gameTick;
+            return;
+        }
+
+        long elapsedTicks = gameTick - lastTaskExperienceUpdateTick;
+        lastTaskExperienceUpdateTick = gameTick;
+        if (elapsedTicks <= 0L) return;
+
         for (SwarmTaskType task : SwarmTaskType.values()) {
-            double value = taskExperience(task) * retention;
-            if (task == activeTask) {
-                value += Math.max(0.0, gain);
-            }
-            taskExperience.put(task, Math.max(0.0, Math.min(1.0, value)));
+            double taskGain = task == activeTask ? gain : 0.0;
+            taskExperience.put(task, SwarmTaskExperiencePolicy.advance(
+                    taskExperience(task),
+                    taskGain,
+                    decay,
+                    elapsedTicks
+            ));
         }
     }
 
@@ -927,6 +1069,25 @@ public final class SwarmAgentState {
 
     public double lastSensingNoiseMagnitude() {
         return lastSensingNoiseMagnitude;
+    }
+
+    public long collectiveObservationFusionCount() {
+        return collectiveObservationFusionCount;
+    }
+
+    public int lastFusionContributorCount() {
+        return lastFusionContributorCount;
+    }
+
+    public double lastFusionDisagreement() {
+        return lastFusionDisagreement;
+    }
+
+    public void recordCollectiveObservationFusion(int contributors, double disagreement) {
+        lastFusionContributorCount = Math.max(1, Math.min(64, contributors));
+        lastFusionDisagreement = Double.isFinite(disagreement)
+                ? Math.max(0.0, disagreement) : 0.0;
+        if (lastFusionContributorCount > 1) collectiveObservationFusionCount++;
     }
 
     public BlockState carriedEngineeringBlock() {

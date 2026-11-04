@@ -19,7 +19,9 @@ public final class SwarmControlScreen extends Screen {
         SENSING("Sensing"),
         COMMUNICATION("Communication"),
         SEARCH("Search & Prediction"),
-        NAVIGATION("Navigation");
+        NAVIGATION("Navigation"),
+        BEES("Bee Ecology"),
+        LEARNING("Player Learning");
 
         private final String label;
 
@@ -105,7 +107,117 @@ public final class SwarmControlScreen extends Screen {
             case COMMUNICATION -> buildCommunication();
             case SEARCH -> buildSearch();
             case NAVIGATION -> buildNavigation();
+            case BEES -> buildBees();
+            case LEARNING -> buildPlayerLearning();
         }
+    }
+
+    private void buildBees() {
+        int leftX = width / 2 - 310;
+        int rightX = width / 2 + 10;
+        int y = 108;
+
+        addToggleRow(leftX, y, "Colony reproduction",
+                bool("beeReproductionEnabled"), "bee_reproduction_toggle");
+        addStatusRow(rightX, y, "Loaded living Bees",
+                Integer.toString((int) number("liveBees")));
+        y += 28;
+
+        addNumericRow(leftX, y, "Bees per hive",
+                Integer.toString((int) number("beeHiveCapacity")),
+                "bee_capacity_delta", 1.0);
+        addNumericRow(rightX, y, "Colony population cap",
+                Integer.toString((int) number("beeColonyMaxPopulation")),
+                "bee_population_delta", 4.0);
+        y += 28;
+
+        addNumericRow(leftX, y, "Birth interval",
+                (int) number("beeReproductionInterval") + " ticks",
+                "bee_reproduction_interval_delta", 600.0);
+        addNumericRow(rightX, y, "Baby / breeding speed",
+                (int) number("beeAgeSpeed") + "x",
+                "bee_age_speed_delta", 1.0);
+        y += 28;
+
+        addToggleRow(leftX, y, "Bonus honey production",
+                bool("beeHoneyBonusEnabled"), "bee_honey_toggle");
+        addNumericRow(rightX, y, "Honey production multiplier",
+                (int) number("beeHoneyMultiplier") + "x",
+                "bee_honey_multiplier_delta", 1.0);
+        y += 28;
+
+        addToggleRow(leftX, y, "Connected hive expansion",
+                bool("beeHiveGrowthEnabled"), "bee_growth_toggle");
+        addToggleRow(rightX, y, "Flower sharing / recruitment",
+                bool("beeFlowerRecruitmentEnabled"), "bee_flower_toggle");
+        y += 28;
+
+        addToggleRow(leftX, y, "Colony shelter alarms",
+                bool("beeShelterEnabled"), "bee_shelter_toggle");
+        addStatusRow(rightX, y, "Behavioral castes",
+                "FORAGER / NURSE / GUARD / BUILDER / SCOUT");
+        y += 34;
+
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal("Bee ecology baseline"),
+                        button -> SwarmControlClient.sendAction("bee_baseline", 0.0)
+                ).bounds(leftX, y, 300, 20).build()
+        );
+        addStatusRow(rightX, y, "Capacity",
+                "Vanilla hive storage; server-configured and bounded");
+    }
+
+    private void buildPlayerLearning() {
+        int leftX = width / 2 - 310;
+        int rightX = width / 2 + 10;
+        int y = 108;
+
+        addToggleRow(leftX, y, "Learn player combat and movement",
+                bool("playerLearningEnabled"), "player_learning_toggle");
+        addStatusRow(rightX, y, "Tracked players / hit samples",
+                (int) number("learningProfiles") + " / " + (int) number("learningSamples"));
+        y += 30;
+
+        addStatusRow(leftX, y, "Attack pattern",
+                values.getOrDefault("learningDominantStyle", "UNKNOWN"));
+        addStatusRow(rightX, y, "Movement pattern",
+                values.getOrDefault("motionDominantStyle", "UNKNOWN"));
+        y += 28;
+
+        addStatusRow(leftX, y, "Attack profile",
+                "M " + format(number("learningMeleeShare"))
+                        + "  P " + format(number("learningProjectileShare"))
+                        + "  X " + format(number("learningExplosiveShare")));
+        addStatusRow(rightX, y, "Movement profile",
+                "Still " + format(number("motionStationaryShare"))
+                        + "  Walk " + format(number("motionWalkingShare"))
+                        + "  Sprint " + format(number("motionSprintingShare"))
+                        + "  Erratic " + format(number("motionErraticShare")));
+        y += 28;
+
+        addStatusRow(leftX, y, "Evidence",
+                (int) number("motionProfiles") + " movement profiles / "
+                        + (int) number("motionSamples") + " decayed samples");
+        addStatusRow(rightX, y, "Privacy",
+                "Session-only summaries; no raw paths or uploads");
+        y += 30;
+
+        addNumericRow(leftX, y, "Tactical pattern hold",
+                (int) number("tacticalPatternHysteresisTicks") + " ticks",
+                "tactical_pattern_hysteresis_delta", 2.0);
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal("Reset learned player profiles"),
+                        button -> SwarmControlClient.sendAction("player_learning_reset", 0.0)
+                ).bounds(rightX, y, 300, 20).build()
+        );
+        y += 30;
+
+        addStatusRow(leftX, y, "Response",
+                "Melee: compact · Projectile / explosive: wider spacing");
+        addStatusRow(rightX, y, "Motion",
+                "Fast / erratic movement: broader coverage and bounded lead");
     }
 
     private void buildOverview() {
@@ -176,6 +288,13 @@ public final class SwarmControlScreen extends Screen {
                         + " / FLANK " + (int) number("taskFlank"));
         y += 28;
 
+        addToggleRow(leftX, y, "Local peer task auction",
+                bool("localTaskAuctionEnabled"), "toggle_local_task_auction");
+        addStatusRow(rightX, y, "Auction rounds / assignments",
+                (int) number("taskAuctionRounds") + " / "
+                        + (int) number("taskAuctionAssignments"));
+        y += 28;
+
         addNumericRow(leftX, y, "Minimum specialization hold",
                 (int) number("specializationHoldTicks") + " ticks",
                 "specialization_hold_delta", 5.0);
@@ -185,7 +304,7 @@ public final class SwarmControlScreen extends Screen {
                         + " / " + (int) number("taskReserve"));
         y += 28;
 
-        addNumericRow(leftX, y, "Experience gain",
+        addNumericRow(leftX, y, "Experience gain / 6 ticks",
                 format(number("specializationExperienceGain")),
                 "specialization_gain_delta", 0.005);
         addStatusRow(rightX, y, "Engineer / carrier / scout",
@@ -194,7 +313,7 @@ public final class SwarmControlScreen extends Screen {
                         + " / " + (int) number("specScout"));
         y += 28;
 
-        addNumericRow(leftX, y, "Experience retention",
+        addNumericRow(leftX, y, "Retention / 6 ticks",
                 format(number("specializationExperienceDecay")),
                 "specialization_decay_delta", 0.001);
         addStatusRow(rightX, y, "Interceptor / overwatch",
@@ -323,8 +442,8 @@ public final class SwarmControlScreen extends Screen {
 
         addRenderableWidget(
                 Button.builder(
-                        Component.literal("Refresh AI State"),
-                        button -> SwarmControlClient.sendAction("ai_refresh", 0.0)
+                        Component.literal("Discover / Diagnose Ollama"),
+                        button -> SwarmControlClient.sendAction("ai_discover", 0.0)
                 ).bounds(rightX, y, 300, 20).build()
         );
         y += 30;
@@ -420,7 +539,55 @@ public final class SwarmControlScreen extends Screen {
                             }
                     ).bounds(leftX, y, 620, 20).build()
             );
+            y += 26;
         }
+
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal(
+                                "Saved experiments=" + (int) number("aiMemoryRuns")
+                                        + " | presets=" + (int) number("aiMemoryPresets")
+                                        + " | evaluation=" + values.getOrDefault("aiLastEvaluationConfidence", "NONE")
+                        ),
+                        button -> {
+                        }
+                ).bounds(leftX, y, 620, 20).build()
+        );
+        y += 26;
+
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal("Record Experiment Snapshot"),
+                        button -> SwarmControlClient.sendAction("experiment_record", 0.0)
+                ).bounds(leftX, y, 300, 20).build()
+        );
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal("Evaluate Saved Experiments"),
+                        button -> SwarmControlClient.sendAction("ai_evaluate", 0.0)
+                ).bounds(rightX, y, 300, 20).build()
+        );
+        y += 26;
+
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal(
+                                "Latest evaluation: " + abbreviate(
+                                        values.getOrDefault("aiLastEvaluation", "No saved evaluation"), 90
+                                )
+                        ),
+                        button -> {
+                        }
+                ).bounds(leftX, y, 620, 20).build()
+        );
+        y += 26;
+
+        addRenderableWidget(
+                Button.builder(
+                        Component.literal("Review Cross-Experiment Transfer Evidence"),
+                        button -> SwarmControlClient.sendAction("ai_transfer", 0.0)
+                ).bounds(leftX, y, 620, 20).build()
+        );
     }
 
     private void buildExperiment() {
@@ -674,6 +841,32 @@ public final class SwarmControlScreen extends Screen {
                 "toggle_comm"
         );
         y += 28;
+
+        addToggleRow(
+                x, y,
+                "Collective observation fusion",
+                bool("observationFusionEnabled"),
+                "toggle_observation_fusion"
+        );
+        y += 28;
+
+        addNumericRow(
+                x, y,
+                "Fusion time window",
+                (int) number("observationFusionWindowTicks") + " ticks",
+                "fusion_window_delta",
+                1.0
+        );
+        y += 28;
+
+        addStatusRow(
+                x, y,
+                "Fusions / agents / contributors",
+                (int) number("observationFusionCount") + " / "
+                        + (int) number("observationFusionAgents") + " / "
+                        + format(number("observationFusionAvgContributors"))
+        );
+        y += 34;
 
         addNumericRow(
                 x, y,
