@@ -668,6 +668,7 @@ public final class SwarmMobEvents {
                 || coverage.frontAnchor()
                 || frontlineRotated
                 || (mob instanceof Spider && proposedRole != state.role());
+        SwarmRole previousTacticalRole = state.role();
         SwarmRole tacticalRole = state.stabilizeRole(
                 proposedRole,
                 gameTick,
@@ -675,6 +676,11 @@ public final class SwarmMobEvents {
                         ? Math.min(8, SwarmConfig.ROLE_HYSTERESIS_TICKS.get())
                         : SwarmConfig.ROLE_HYSTERESIS_TICKS.get()
         );
+        if (frontlineRotated) {
+            SwarmActionVisuals.reliefRotation(level, mob);
+        } else if (previousTacticalRole != tacticalRole) {
+            SwarmActionVisuals.roleChanged(level, mob, tacticalRole);
+        }
         state.updateVacantFlankCoverage(
                 coverage.fillingMissingFlank() && tacticalRole == coverage.role());
 
@@ -772,7 +778,11 @@ public final class SwarmMobEvents {
                             .toList(),
                     SwarmConfig.DIVISION_OF_LABOR_ENABLED.get()
             );
+            boolean wasRegrouping = state.searchRallyActive();
             state.updateSearchRally(rally.regrouping());
+            if (rally.regrouping() && !wasRegrouping) {
+                SwarmActionVisuals.regroup(level, mob);
+            }
 
             state.updateLocalPlan(
                     movementNeighbors.size(),
@@ -1456,8 +1466,13 @@ public final class SwarmMobEvents {
         int memoryTicks = SwarmConfig.TARGET_MEMORY_TICKS.get();
         List<TargetObservation> records = new ArrayList<>();
 
-        for (var message : state.drainDeliverableTargetMessages(gameTick)) {
+        var deliverableMessages = state.drainDeliverableTargetMessages(gameTick);
+        for (var message : deliverableMessages) {
             records.add(message.observation());
+        }
+        if (!deliverableMessages.isEmpty()) {
+            SwarmActionVisuals.communicationAcknowledged(
+                    level, self, deliverableMessages.size());
         }
 
         Player direct = findDirectObservation(

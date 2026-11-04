@@ -104,6 +104,7 @@ public final class SwarmSpiderColonyScoutGoal extends Goal {
             home = null;
             return;
         }
+        SwarmActionVisuals.scoutObserve(level, spider);
         int marked = 0;
         long now = level.getGameTime();
         for (ItemEntity item : level.getEntitiesOfClass(

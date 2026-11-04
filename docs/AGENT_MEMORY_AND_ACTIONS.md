@@ -50,7 +50,24 @@ The server-side planner remains the source of truth. GeckoLib only renders an ev
 
 Vanilla renderer behavior should be preserved wherever possible. Any renderer replacement must first account for equipment, armor, held items, invisibility, name tags, native movement, and species-specific vanilla states, then pass client playtesting before it becomes the default.
 
-## AI boundary
+## GeckoLib agent action overlays
+
+The vanilla Zombie, Spider, Skeleton, and Creeper renderers receive a GeckoLib action layer. This preserves their native body models, armor/equipment rendering, held items, bow drawing, Creeper fuse visuals, movement, and name tags. GeckoLib draws a compact animated action marker above the existing model rather than replacing the mob renderer.
+
+The common event bridge is:
+
+`Swarm state transition → SwarmAnimationCue → SwarmActionAnimatable → synchronized GeckoLib controller → client render layer`
+
+Implemented event-linked cues:
+
+- **Engineer:** inspect → looping work gesture marker → completion/cancel; existing vanilla arm swings and block particles remain tied to real block work.
+- **Carrier:** track a real item or scout lead → pickup → carry loop → delivery; the carry loop stops on interruption, and delivery only triggers after actual item intake.
+- **Spider scout:** observe → report pulse; the Nest Core independently acknowledges accepted reports with its own GeckoLib signal.
+- **Squad coordination:** flank setup, regroup transition, frontline relief rotation, role change, and acknowledgement of delivered peer observations.
+- **Skeleton/Creeper:** support-ready and breach-ready cues supplement, but do not replace, vanilla bow and fuse animations.
+
+The action marker uses a hidden idle pose and short triggered animations, so idle mobs do not carry permanent floating decorations. All cues are triggered by server-side state transitions and governed by the existing `actionVisualsEnabled` setting.
+
 
 The deterministic swarm planner remains the gameplay authority. Ollama Shadow remains observational. Existing Active mode may only apply its already bounded high-level strategy multipliers; it does not receive entity-level memory writes or direct action control.
 
