@@ -38,6 +38,14 @@ side="BOTH"
 
 
 [[dependencies.${mod_id}]]
+modId="geckolib"
+type="required"
+reason="Swarm Mobs uses GeckoLib for synchronized, event-driven role and coordination animations."
+versionRange="[${geckolib_version},5)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
 modId="cloth_config"
 type="required"
 reason="Swarm Mobs uses Cloth Config for the client-side Command Center UI."

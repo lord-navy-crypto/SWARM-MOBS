@@ -14,19 +14,31 @@ Periodic NBT writes are deterministically spread over a 200-tick window. The per
 
 ## Action-linked visuals
 
-The supported mobs use vanilla Minecraft renderers, so this phase deliberately avoids replacing those renderers or adding a mandatory animation framework.
+The current Phase IV-H implementation uses vanilla entity swing synchronization and event-linked particles:
 
-- **Zombie engineer:** repeated arm swings and source-block particles while breaking or placing a bridge block.
-- **Zombie gatherer:** a visible work swing and block particles when harvesting a real resource block.
-- **Zombie carrier:** a pickup gesture when the real dropped item transitions to the return trip; delivery particles appear at the Nest Core only after the item is physically accepted.
-- **Spider scout:** a short electric-spark pulse only when it publishes at least one valid scout report.
-- **Skeleton:** native bow draw/release pose remains authoritative.
-- **Creeper:** native swell/fuse animation remains authoritative.
-- **All supported species:** a small task-specific particle cue appears when the deterministic task assignment actually changes.
+- **Zombie engineer/gatherer:** visible work swings and source-block particles only during real work.
+- **Zombie carrier:** pickup and accepted-delivery cues only after the corresponding inventory transition succeeds.
+- **Spider scout:** a signal pulse only after publishing at least one valid report.
+- **Skeleton and Creeper:** their native animation systems remain authoritative.
+- **All supported species:** a small task-specific cue appears when the deterministic assignment actually changes.
 
-These are client-visible server events using vanilla entity swing synchronization and particles. They do not change pathfinding, attack cadence, fuse timing, task allocation, or world mutation.
+These cues do not change pathfinding, attack cadence, fuse timing, task allocation, or world mutation. They can be disabled with the server config option `actionVisualsEnabled`.
 
-The visuals can be disabled with the server config option `actionVisualsEnabled`.
+## GeckoLib animation foundation
+
+GeckoLib **4.9.3** is pinned for Minecraft 1.21.1 / NeoForge and declared as a required runtime dependency. This foundation commit adds the dependency and metadata; it does not claim that GeckoLib entity renderers or animation assets are already active.
+
+The next renderer stage will translate real deterministic state transitions into synchronized, short-lived animation triggers:
+
+- task assignment/change: role-specific transition cue;
+- engineer work: inspect → work loop → completion;
+- carrier: acquire → carry loop → accepted delivery;
+- scout: observe → report pulse → return to patrol;
+- squad coordination: flank setup, regroup, relief rotation and report acknowledgement.
+
+The server-side planner remains the source of truth. GeckoLib only renders an event that the planner has already produced; it does not choose tasks, targets, paths, attacks, or world mutations. Ollama Shadow remains advisory, and bounded Active mode cannot trigger arbitrary per-tick animation or gameplay commands.
+
+Vanilla renderer behavior should be preserved wherever possible. Any renderer replacement must first account for equipment, armor, held items, invisibility, name tags, native movement, and species-specific vanilla states, then pass client playtesting before it becomes the default.
 
 ## AI boundary
 
