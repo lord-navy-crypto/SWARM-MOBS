@@ -112,7 +112,6 @@ public final class BeeFlowerEvents {
             if (homeDistanceSquared > 2.5 * 2.5
                     && (bee.getNavigation().isDone()
                         || Math.floorMod(now + bee.getId(), 20L) == 0L)) {
-                SwarmActionVisuals.beeReturnHome(level, bee);
                 bee.getNavigation().moveTo(
                         home.getX() + 0.5, home.getY() + 0.5,
                         home.getZ() + 0.5, 0.85);
