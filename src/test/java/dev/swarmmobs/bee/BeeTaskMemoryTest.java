@@ -8,6 +8,19 @@ class BeeTaskMemoryTest {
     private static final BeeTaskPolicy.Needs EMPTY = new BeeTaskPolicy.Needs(0, 0, 0, 0, 0);
 
     @Test
+    void currentTaskLookupRequiresFreshAssignmentInTheSameHive() {
+        var memory = new BeeTaskMemory();
+        UUID bee = new UUID(0, 18);
+        var threat = new BeeTaskPolicy.Needs(0, 0, 1, 0, 0);
+        assertNull(memory.task(bee, 10L, 100L));
+
+        assertEquals(BeeTaskPolicy.Task.GUARD, memory.assign(bee, 10L, threat, 100L));
+        assertEquals(BeeTaskPolicy.Task.GUARD, memory.task(bee, 10L, 200L));
+        assertNull(memory.task(bee, 11L, 200L));
+        assertNull(memory.task(bee, 10L, 501L));
+    }
+
+    @Test
     void workforceCountsAreScopedToTheAssignedHive() {
         var memory = new BeeTaskMemory();
         long hiveA = 101L;

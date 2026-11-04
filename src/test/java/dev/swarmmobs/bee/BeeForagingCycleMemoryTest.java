@@ -23,6 +23,18 @@ class BeeForagingCycleMemoryTest {
         assertEquals(1, duplicateSample.completedTripsSinceRest());
     }
 
+    @Test void acquiredNectarIsReportedOnlyOnTheFalseToTrueTransition() {
+        var memory = new BeeForagingCycleMemory();
+        var first = memory.observe(BEE, false, FLOWER, HIVE, false, 100);
+        assertFalse(first.acquiredNectar());
+
+        var pollinated = memory.observe(BEE, true, FLOWER, HIVE, false, 101);
+        assertTrue(pollinated.acquiredNectar());
+
+        var stillCarrying = memory.observe(BEE, true, FLOWER, HIVE, false, 102);
+        assertFalse(stillCarrying.acquiredNectar());
+    }
+
     @Test void hiveChangeDoesNotCompleteATripAgainstTheWrongColony() {
         var memory = new BeeForagingCycleMemory();
         memory.observe(BEE, false, null, HIVE, true, 100);

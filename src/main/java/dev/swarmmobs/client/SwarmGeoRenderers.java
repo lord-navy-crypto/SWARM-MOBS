@@ -30,6 +30,7 @@ public final class SwarmGeoRenderers {
 
     @SubscribeEvent
     public static void addActionLayers(EntityRenderersEvent.AddLayers event) {
+        addActionLayer(event, EntityType.BEE, SwarmActionAnimatable.BEE);
         addActionLayer(event, EntityType.ZOMBIE, SwarmActionAnimatable.ZOMBIE);
         addActionLayer(event, EntityType.SPIDER, SwarmActionAnimatable.SPIDER);
         addActionLayer(event, EntityType.SKELETON, SwarmActionAnimatable.SKELETON);

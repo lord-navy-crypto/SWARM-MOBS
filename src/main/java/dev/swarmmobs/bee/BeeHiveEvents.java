@@ -2,6 +2,7 @@ package dev.swarmmobs.bee;
 
 import dev.swarmmobs.colony.ColonyPhysicalGrowth;
 import dev.swarmmobs.config.SwarmConfig;
+import dev.swarmmobs.visual.SwarmActionVisuals;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -142,6 +143,7 @@ public final class BeeHiveEvents {
             bee.setSavedFlowerPos(null);
             BeeColonyRuntime.tasks(level).clear(bee.getUUID());
             hiveMemory.reserve(bee.getUUID(), site, 0, now);
+            SwarmActionVisuals.beeBuildCompleted(level, bee, site);
             return true;
         }
         return false;

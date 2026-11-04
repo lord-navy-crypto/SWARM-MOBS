@@ -3,6 +3,10 @@ package dev.swarmmobs.visual;
 import dev.swarmmobs.agent.SwarmRole;
 import dev.swarmmobs.agent.SwarmTaskType;
 import dev.swarmmobs.config.SwarmConfig;
+import dev.swarmmobs.bee.BeeActionMemory;
+import dev.swarmmobs.bee.BeeCastePolicy;
+import dev.swarmmobs.bee.BeeColonyRuntime;
+import dev.swarmmobs.bee.BeeTaskPolicy;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleOptions;
@@ -10,6 +14,7 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.Spider;
@@ -163,6 +168,62 @@ public final class SwarmActionVisuals {
                                                   int deliveredMessages) {
         if (deliveredMessages > 0)
             trigger(mob, SwarmAnimationCue.COMMUNICATION_ACKNOWLEDGED);
+    }
+
+    private static void triggerBee(
+            ServerLevel level, Bee bee, SwarmAnimationCue cue, long cooldownTicks) {
+        if (level == null || bee == null || cue == null
+                || !SwarmConfig.ACTION_VISUALS_ENABLED.get()) return;
+        BeeActionMemory memory = BeeColonyRuntime.actions(level);
+        if (!memory.claim(bee.getUUID(), cue, level.getGameTime(), cooldownTicks)) return;
+        trigger(bee, cue);
+    }
+
+    /** A task badge marks the worker's actual current colony assignment. */
+    public static void beeTaskChanged(ServerLevel level, Bee bee, BeeTaskPolicy.Task task) {
+        SwarmAnimationCue cue = switch (task) {
+            case FORAGE -> SwarmAnimationCue.BEE_FORAGE_DUTY;
+            case NURSE -> SwarmAnimationCue.BEE_NURSE_DUTY;
+            case GUARD -> SwarmAnimationCue.BEE_GUARD_DUTY;
+            case BUILD -> SwarmAnimationCue.BEE_BUILD_DUTY;
+            case REST -> SwarmAnimationCue.BEE_REST;
+        };
+        triggerBee(level, bee, cue, 20L);
+    }
+
+    public static void beeForageDispatch(ServerLevel level, Bee bee) {
+        triggerBee(level, bee, SwarmAnimationCue.BEE_FORAGE_DISPATCH, 40L);
+    }
+
+    public static void beePollinate(ServerLevel level, Bee bee) {
+        triggerBee(level, bee, SwarmAnimationCue.BEE_POLLINATE, 30L);
+    }
+
+    public static void beeReturnDelivery(ServerLevel level, Bee bee) {
+        triggerBee(level, bee, SwarmAnimationCue.BEE_HONEY_DELIVERY, 40L);
+    }
+
+    public static void beeReturnHome(ServerLevel level, Bee bee) {
+        triggerBee(level, bee, SwarmAnimationCue.BEE_RETURN_HOME, 40L);
+    }
+
+    public static void beeGuardAlert(ServerLevel level, Bee bee) {
+        if (BeeCastePolicy.caste(bee.getUUID()) != BeeCastePolicy.Caste.GUARD) return;
+        triggerBee(level, bee, SwarmAnimationCue.BEE_GUARD_ALERT, 80L);
+    }
+
+    public static void beeBuildCompleted(ServerLevel level, Bee bee, BlockPos hivePosition) {
+        if (hivePosition == null) return;
+        triggerBee(level, bee, SwarmAnimationCue.BEE_BUILD_COMPLETE, 100L);
+        if (!SwarmConfig.ACTION_VISUALS_ENABLED.get()) return;
+        level.sendParticles(ParticleTypes.HAPPY_VILLAGER,
+                hivePosition.getX() + 0.5, hivePosition.getY() + 0.7, hivePosition.getZ() + 0.5,
+                8, 0.35, 0.25, 0.35, 0.015);
+    }
+
+    public static void beeScoutReport(ServerLevel level, Bee bee) {
+        if (BeeCastePolicy.caste(bee.getUUID()) != BeeCastePolicy.Caste.SCOUT) return;
+        triggerBee(level, bee, SwarmAnimationCue.BEE_SCOUT_REPORT, 100L);
     }
 
     private SwarmActionVisuals() {}

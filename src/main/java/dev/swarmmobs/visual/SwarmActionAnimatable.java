@@ -2,6 +2,7 @@ package dev.swarmmobs.visual;
 
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Skeleton;
 import net.minecraft.world.entity.monster.Spider;
@@ -35,7 +36,20 @@ public final class SwarmActionAnimatable implements GeoReplacedEntity {
     private static final RawAnimation SUPPORT_READY = RawAnimation.begin().thenPlay("animation.swarm_action.support_ready");
     private static final RawAnimation BREACH_READY = RawAnimation.begin().thenPlay("animation.swarm_action.breach_ready");
     private static final RawAnimation COMMUNICATION_ACKNOWLEDGED = RawAnimation.begin().thenPlay("animation.swarm_action.communication_acknowledged");
+    private static final RawAnimation BEE_FORAGE_DUTY = RawAnimation.begin().thenPlay("animation.swarm_action.bee_forage_duty");
+    private static final RawAnimation BEE_FORAGE_DISPATCH = RawAnimation.begin().thenPlay("animation.swarm_action.bee_forage_dispatch");
+    private static final RawAnimation BEE_POLLINATE = RawAnimation.begin().thenPlay("animation.swarm_action.bee_pollinate");
+    private static final RawAnimation BEE_NURSE_DUTY = RawAnimation.begin().thenPlay("animation.swarm_action.bee_nurse_duty");
+    private static final RawAnimation BEE_GUARD_DUTY = RawAnimation.begin().thenPlay("animation.swarm_action.bee_guard_duty");
+    private static final RawAnimation BEE_GUARD_ALERT = RawAnimation.begin().thenPlay("animation.swarm_action.bee_guard_alert");
+    private static final RawAnimation BEE_BUILD_DUTY = RawAnimation.begin().thenPlay("animation.swarm_action.bee_build_duty");
+    private static final RawAnimation BEE_BUILD_COMPLETE = RawAnimation.begin().thenPlay("animation.swarm_action.bee_build_complete");
+    private static final RawAnimation BEE_REST = RawAnimation.begin().thenPlay("animation.swarm_action.bee_rest");
+    private static final RawAnimation BEE_RETURN_HOME = RawAnimation.begin().thenPlay("animation.swarm_action.bee_return_home");
+    private static final RawAnimation BEE_HONEY_DELIVERY = RawAnimation.begin().thenPlay("animation.swarm_action.bee_honey_delivery");
+    private static final RawAnimation BEE_SCOUT_REPORT = RawAnimation.begin().thenPlay("animation.swarm_action.bee_scout_report");
 
+    public static final SwarmActionAnimatable BEE = new SwarmActionAnimatable(EntityType.BEE);
     public static final SwarmActionAnimatable ZOMBIE = new SwarmActionAnimatable(EntityType.ZOMBIE);
     public static final SwarmActionAnimatable SPIDER = new SwarmActionAnimatable(EntityType.SPIDER);
     public static final SwarmActionAnimatable SKELETON = new SwarmActionAnimatable(EntityType.SKELETON);
@@ -51,12 +65,15 @@ public final class SwarmActionAnimatable implements GeoReplacedEntity {
     }
 
     public static SwarmActionAnimatable forMob(PathfinderMob mob) {
+        if (mob instanceof Bee) return BEE;
         if (mob instanceof Zombie) return ZOMBIE;
         if (mob instanceof Spider) return SPIDER;
         if (mob instanceof Skeleton) return SKELETON;
         if (mob instanceof Creeper) return CREEPER;
         return null;
     }
+
+    public boolean isBee() { return replacingType == EntityType.BEE; }
 
     @Override public EntityType<?> getReplacingEntityType() { return replacingType; }
 
@@ -82,6 +99,18 @@ public final class SwarmActionAnimatable implements GeoReplacedEntity {
         c.triggerableAnim(SwarmAnimationCue.SUPPORT_READY.animationName(), SUPPORT_READY);
         c.triggerableAnim(SwarmAnimationCue.BREACH_READY.animationName(), BREACH_READY);
         c.triggerableAnim(SwarmAnimationCue.COMMUNICATION_ACKNOWLEDGED.animationName(), COMMUNICATION_ACKNOWLEDGED);
+        c.triggerableAnim(SwarmAnimationCue.BEE_FORAGE_DUTY.animationName(), BEE_FORAGE_DUTY);
+        c.triggerableAnim(SwarmAnimationCue.BEE_FORAGE_DISPATCH.animationName(), BEE_FORAGE_DISPATCH);
+        c.triggerableAnim(SwarmAnimationCue.BEE_POLLINATE.animationName(), BEE_POLLINATE);
+        c.triggerableAnim(SwarmAnimationCue.BEE_NURSE_DUTY.animationName(), BEE_NURSE_DUTY);
+        c.triggerableAnim(SwarmAnimationCue.BEE_GUARD_DUTY.animationName(), BEE_GUARD_DUTY);
+        c.triggerableAnim(SwarmAnimationCue.BEE_GUARD_ALERT.animationName(), BEE_GUARD_ALERT);
+        c.triggerableAnim(SwarmAnimationCue.BEE_BUILD_DUTY.animationName(), BEE_BUILD_DUTY);
+        c.triggerableAnim(SwarmAnimationCue.BEE_BUILD_COMPLETE.animationName(), BEE_BUILD_COMPLETE);
+        c.triggerableAnim(SwarmAnimationCue.BEE_REST.animationName(), BEE_REST);
+        c.triggerableAnim(SwarmAnimationCue.BEE_RETURN_HOME.animationName(), BEE_RETURN_HOME);
+        c.triggerableAnim(SwarmAnimationCue.BEE_HONEY_DELIVERY.animationName(), BEE_HONEY_DELIVERY);
+        c.triggerableAnim(SwarmAnimationCue.BEE_SCOUT_REPORT.animationName(), BEE_SCOUT_REPORT);
         controllers.add(c);
     }
 

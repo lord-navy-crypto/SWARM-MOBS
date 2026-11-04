@@ -51,6 +51,17 @@ The server-side planner remains the source of truth. GeckoLib only renders an ev
 Vanilla renderer behavior should be preserved wherever possible. Any renderer replacement must first account for equipment, armor, held items, invisibility, name tags, native movement, and species-specific vanilla states, then pass client playtesting before it becomes the default.
 
 ## GeckoLib agent action overlays
+The same action layer now includes vanilla Bees. It reflects the existing deterministic caste/task model without replacing vanilla bee navigation, pollination, hive entry, or stinging behavior:
+
+- **Foragers:** task assignment, flower dispatch, and the real transition to carrying nectar.
+- **Nurses:** a short duty marker when the NURSE assignment is selected. This is an assignment indicator; it does not claim brood-care mechanics have been added.
+- **Guards:** duty and threat-alert cues. The existing shelter policy still decides whether an unladen bee returns to its own hive; no new attack target or sting behavior is introduced.
+- **Builders:** a construction-duty cue and a completion cue only after a connected hive extension is physically placed and paid for.
+- **Scouts:** a waggle-style report cue after a completed foraging trip is recorded by the existing flower-memory system.
+- **Rest/return:** brief return-home and rest cues, throttled per bee to prevent animation spam.
+
+Nectar acquisition is detected as a real false-to-true transition in the existing foraging-cycle memory. Per-bee cue cooldowns are bounded and transient. These animations remain presentation-only and do not change the colony's task auction or vanilla Bee goals.
+
 
 The vanilla Zombie, Spider, Skeleton, and Creeper renderers receive a GeckoLib action layer. This preserves their native body models, armor/equipment rendering, held items, bow drawing, Creeper fuse visuals, movement, and name tags. GeckoLib draws a compact animated action marker above the existing model rather than replacing the mob renderer.
 

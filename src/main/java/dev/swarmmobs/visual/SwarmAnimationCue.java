@@ -19,7 +19,19 @@ public enum SwarmAnimationCue {
     ROLE_CHANGE("role_change"),
     SUPPORT_READY("support_ready"),
     BREACH_READY("breach_ready"),
-    COMMUNICATION_ACKNOWLEDGED("communication_acknowledged");
+    COMMUNICATION_ACKNOWLEDGED("communication_acknowledged"),
+    BEE_FORAGE_DUTY("bee_forage_duty"),
+    BEE_FORAGE_DISPATCH("bee_forage_dispatch"),
+    BEE_POLLINATE("bee_pollinate"),
+    BEE_NURSE_DUTY("bee_nurse_duty"),
+    BEE_GUARD_DUTY("bee_guard_duty"),
+    BEE_GUARD_ALERT("bee_guard_alert"),
+    BEE_BUILD_DUTY("bee_build_duty"),
+    BEE_BUILD_COMPLETE("bee_build_complete"),
+    BEE_REST("bee_rest"),
+    BEE_RETURN_HOME("bee_return_home"),
+    BEE_HONEY_DELIVERY("bee_honey_delivery"),
+    BEE_SCOUT_REPORT("bee_scout_report");
 
     private final String animationName;
     SwarmAnimationCue(String animationName) { this.animationName = animationName; }

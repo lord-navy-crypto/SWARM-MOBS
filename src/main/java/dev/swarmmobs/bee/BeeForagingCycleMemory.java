@@ -18,7 +18,8 @@ public final class BeeForagingCycleMemory {
     public static final long NO_FLOWER = Long.MIN_VALUE;
 
     public record Snapshot(double fatigue, int completedTripsSinceRest,
-            boolean completedTrip, long completedFlower, long completedHive) {}
+            boolean acquiredNectar, boolean completedTrip,
+            long completedFlower, long completedHive) {}
 
     private record Worker(boolean hasNectar, long flower, long hive,
             long lastSeenTick, int completedTripsSinceRest,
@@ -39,11 +40,11 @@ public final class BeeForagingCycleMemory {
             workers.put(beeId, new Worker(hasNectar, flower, hive, now, 0, 0.0,
                     Long.MIN_VALUE));
             trim();
-            return snapshot(0.0, 0, false, NO_FLOWER, hive);
+            return snapshot(0.0, 0, false, false, NO_FLOWER, hive);
         }
         if (now < old.lastSeenTick()) {
             return snapshot(old.fatigue(), old.completedTripsSinceRest(),
-                    false, NO_FLOWER, old.hive());
+                    false, false, NO_FLOWER, old.hive());
         }
 
         double fatigue = old.fatigue();
@@ -60,6 +61,7 @@ public final class BeeForagingCycleMemory {
             restRequestedAt = Long.MIN_VALUE;
         }
 
+        boolean acquiredNectar = !old.hasNectar() && hasNectar;
         boolean completed = old.hasNectar() && !hasNectar
                 && nearHive && old.hive() == hive;
         long completedFlower = NO_FLOWER;
@@ -83,7 +85,8 @@ public final class BeeForagingCycleMemory {
         workers.put(beeId, new Worker(hasNectar, flower, hive, now,
                 trips, fatigue, restRequestedAt));
         trim();
-        return snapshot(fatigue, trips, completed, completedFlower, completedHive);
+        return snapshot(fatigue, trips, acquiredNectar, completed,
+                completedFlower, completedHive);
     }
 
     /** Starts a rest lease without repeatedly extending it on each tick. */
@@ -125,8 +128,8 @@ public final class BeeForagingCycleMemory {
     }
 
     private static Snapshot snapshot(double fatigue, int trips,
-            boolean completed, long flower, long hive) {
-        return new Snapshot(fatigue, trips, completed, flower, hive);
+            boolean acquiredNectar, boolean completed, long flower, long hive) {
+        return new Snapshot(fatigue, trips, acquiredNectar, completed, flower, hive);
     }
 
     private void prune(long now) {

@@ -1,6 +1,7 @@
 package dev.swarmmobs.bee;
 
 import dev.swarmmobs.config.SwarmConfig;
+import dev.swarmmobs.visual.SwarmActionVisuals;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -48,6 +49,14 @@ public final class BeeFlowerEvents {
                 savedFlower == null ? null : savedFlower.asLong(),
                 home.asLong(), nearHive, now);
 
+        if (cycle.acquiredNectar()) SwarmActionVisuals.beePollinate(level, bee);
+        if (cycle.completedTrip()) {
+            SwarmActionVisuals.beeReturnDelivery(level, bee);
+            if (BeeCastePolicy.caste(bee.getUUID()) == BeeCastePolicy.Caste.SCOUT) {
+                SwarmActionVisuals.beeScoutReport(level, bee);
+            }
+        }
+
         // A patch is rewarded once, on the observed nectar-carrying -> empty
         // near-hive transition, not on every 100-tick sample while flying home.
         if (flowerRecruitment && cycle.completedTrip()
@@ -86,8 +95,12 @@ public final class BeeFlowerEvents {
         BeeTaskPolicy.Needs needs = colonyNeeds(level, activeHome,
                 cycle.fatigue(), SwarmConfig.BEE_COLONY_SHELTER_ENABLED.get(),
                 hiveGrowth);
-        BeeTaskPolicy.Task task = BeeColonyRuntime.tasks(level).assign(
+        BeeTaskMemory taskMemory = BeeColonyRuntime.tasks(level);
+        BeeTaskPolicy.Task previousTask = taskMemory.task(
+                bee.getUUID(), activeHome.asLong(), now);
+        BeeTaskPolicy.Task task = taskMemory.assign(
                 bee.getUUID(), activeHome.asLong(), needs, now);
+        if (previousTask != task) SwarmActionVisuals.beeTaskChanged(level, bee, task);
 
         if (task == BeeTaskPolicy.Task.REST) {
             BeeColonyRuntime.cycles(level).markRestRequested(bee.getUUID(), now);
@@ -98,6 +111,7 @@ public final class BeeFlowerEvents {
             if (homeDistanceSquared > 2.5 * 2.5
                     && (bee.getNavigation().isDone()
                         || Math.floorMod(now + bee.getId(), 20L) == 0L)) {
+                SwarmActionVisuals.beeReturnHome(level, bee);
                 bee.getNavigation().moveTo(
                         home.getX() + 0.5, home.getY() + 0.5,
                         home.getZ() + 0.5, 0.85);
@@ -114,6 +128,7 @@ public final class BeeFlowerEvents {
             if (distanceSquared > 2.5 * 2.5
                     && (bee.getNavigation().isDone()
                         || Math.floorMod(now + bee.getId(), 20L) == 0L)) {
+                SwarmActionVisuals.beeReturnHome(level, bee);
                 bee.getNavigation().moveTo(activeHome.getX() + 0.5,
                         activeHome.getY() + 0.5, activeHome.getZ() + 0.5, 0.85);
             }
@@ -130,7 +145,10 @@ public final class BeeFlowerEvents {
 
         BlockPos candidate = choose(BeeColonyRuntime.flowers(level), level,
                 activeHome, bee.blockPosition(), now, needs.nectarShortage());
-        if (candidate != null) bee.setSavedFlowerPos(candidate);
+        if (candidate != null) {
+            bee.setSavedFlowerPos(candidate);
+            SwarmActionVisuals.beeForageDispatch(level, bee);
+        }
     }
 
     static BeeTaskPolicy.Needs colonyNeeds(ServerLevel level, BlockPos home,

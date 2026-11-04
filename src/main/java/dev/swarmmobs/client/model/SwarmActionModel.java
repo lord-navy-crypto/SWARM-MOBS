@@ -14,7 +14,9 @@ public final class SwarmActionModel extends GeoModel<SwarmActionAnimatable> {
 
     @Override
     public ResourceLocation getTextureResource(SwarmActionAnimatable animatable) {
-        return ResourceLocation.withDefaultNamespace("textures/block/amethyst_block.png");
+        return animatable.isBee()
+                ? ResourceLocation.withDefaultNamespace("textures/item/honeycomb.png")
+                : ResourceLocation.withDefaultNamespace("textures/block/amethyst_block.png");
     }
 
     @Override

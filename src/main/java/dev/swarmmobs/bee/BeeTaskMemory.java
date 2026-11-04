@@ -81,6 +81,17 @@ public final class BeeTaskMemory {
                 Math.max(1, active + 1), forage, nurse, guard, build, rest);
     }
 
+    /** Current fresh assignment for one bee in one hive; null means no active lease. */
+    public BeeTaskPolicy.Task task(UUID beeId, long colonyKey, long now) {
+        if (beeId == null || now < 0) return null;
+        prune(now);
+        Assignment assignment = assignments.get(beeId);
+        if (assignment == null || assignment.colonyKey() != colonyKey
+                || now < assignment.updatedAt()
+                || now - assignment.updatedAt() > TASK_COUNT_TTL_TICKS) return null;
+        return assignment.task();
+    }
+
     public void clear(UUID beeId) {
         if (beeId != null) assignments.remove(beeId);
     }
